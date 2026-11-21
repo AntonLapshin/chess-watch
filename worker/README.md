@@ -1,17 +1,17 @@
 # Chess Watch Worker
 
 Cloudflare Worker + Durable Object backend for Chess Watch. Replaces the
-old FastAPI laptop server + Cloudflare Tunnel (deleted in the same change;
-see the root README's migration note). The API is identical to the old
-server — see `docs/protocol.md` — so the watch app, side service, and web
+0.1.x laptop-server backend (deleted in 0.2.0). The API is unchanged since
+0.1.x — see `docs/protocol.md` — so the watch app, side service, and web
 harness needed no protocol changes.
 
 ## Layout
 
 ```
 worker/
-  wrangler.toml          Worker + route + DO binding (production)
-  wrangler.test.toml     test-only config (fake tokens, no route)
+  wrangler.toml          Worker + DO binding (production; no route — see Deploy)
+  test-config/
+    wrangler.test.toml   test-only config (fake tokens, no route)
   .dev.vars.example      copy to .dev.vars for local dev (gitignored)
   src/index.js           Worker entry: config check, Bearer auth, routing
   src/game-do.js         ChessGame Durable Object: game state, long-poll
@@ -20,6 +20,14 @@ worker/
   tests/                 vitest: unit (fake storage) + integration (workerd)
 ```
 
+`wrangler` is a devDependency here (installed by `make setup` into
+`worker/node_modules/.bin`). Every wrangler invocation goes through a
+make target or `npx` from `worker/` — no global install needed:
+
+- recommended: `make worker-dev` / `make worker-test` / `make worker-deploy` / `make worker-secrets` / `make worker-logs` from the repo root;
+- direct: `cd worker && npx wrangler <cmd>`;
+- optional: `npm install -g wrangler` if you prefer bare commands.
+
 ## How it works
 
 One Durable Object instance (`ChessGame`, id `"game"`) owns the single
@@ -27,7 +35,7 @@ game. It keeps a live `Chess` instance cached in memory plus the revision,
 offer, presence, and long-poll waiters; SQLite (`ctx.storage.sql`) holds
 the durable copy: one `games` row, `moves` / `actions` tables with UNIQUE
 client ids for idempotency, `meta` for the schema version (same table and
-column names as the old `server/db.py`, plus `games.positions_json`).
+column names as the 0.1.x backend, plus `games.positions_json`).
 
 Two chess.js 1.4.0 gaps shape the design (both verified by measurement):
 
@@ -50,6 +58,12 @@ is deliberately NOT used for the wait (30 s timeout, blocks the DO).
 Offers expire two ways: lazily on read (as before) and via `setAlarm()`
 on offer creation, so an expired offer clears even with no traffic.
 
+CORS is for the browser harness only (the watch does not use it):
+`http://localhost:5173` is always allowed; set `CHESS_CORS_ORIGINS`
+(comma-separated, as a Worker var / secret / `.dev.vars` entry) to allow
+more origins, e.g. the deployed Worker URL when running `make web`
+against it.
+
 ## Free-tier limits
 
 - Requests: 100,000/day — a 20 s long-poll is ~4,320 requests/day per
@@ -68,19 +82,22 @@ on offer creation, so an expired offer clears even with no traffic.
 
 ## Setup
 
+From the repo root:
+
 ```bash
-cd worker
-npm install
-cp .dev.vars.example .dev.vars   # then fill in real tokens (gitignored)
+make setup   # installs root + web + worker, copies .env.example -> .env
+             # and worker/.dev.vars.example -> worker/.dev.vars
 ```
 
 Generate tokens with `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`
-(twice). The SAME tokens go in the repo-root `.env` (watch build).
+(twice). The SAME tokens go in the repo-root `.env` (watch build),
+`worker/.dev.vars` (local dev), and the Worker secrets
+(`make worker-secrets`).
 
 ## Local dev
 
 ```bash
-npm run dev          # wrangler dev on http://localhost:8787
+make worker-dev   # or: cd worker && npm run dev — http://localhost:8787
 ```
 
 Then `make web` in the repo root (the Vite proxy points at
@@ -97,47 +114,52 @@ curl -s -H "Authorization: Bearer $CHESS_TOKEN_P1" \
 ## Deploy + cutover
 
 ```bash
-wrangler secret put CHESS_TOKEN_P1
-wrangler secret put CHESS_TOKEN_P2
-wrangler deploy
+make worker-secrets   # interactive: sets CHESS_TOKEN_P1 / CHESS_TOKEN_P2
+make worker-deploy    # deploys; attaches the route from CHESS_SERVER_URL
 ```
 
-Cutover from the tunnel setup (the old DNS pointed
-`chess.gulfrenderstudio.com` at the tunnel via CNAME):
+`make worker-deploy` runs `scripts/worker-deploy.sh`, which reads
+`CHESS_SERVER_URL` from the repo-root `.env` and passes its host to
+`npx wrangler deploy --route "<host>/*"`. No route is declared in
+`wrangler.toml` — the hostname lives only in that `.env` value.
+Optional `CHESS_WORKER_ZONE` (in `.env` or the environment) is passed as
+`--zone` if route attachment needs an explicit zone. If
+`CHESS_SERVER_URL` is unset, localhost, or a `*.workers.dev` URL, the
+deploy is plain (workers.dev URL only). Dashboard alternative:
+Workers & Pages → chess-watch → Settings → Triggers → Add route.
 
-1. `wrangler deploy` — the `route` in `wrangler.toml` attaches the Worker
-   to `chess.gulfrenderstudio.com`. Verify first on the workers.dev URL:
-   `curl https://<name>.<subdomain>.workers.dev/api/v1/health`.
-2. In the Cloudflare dashboard → DNS, delete the tunnel CNAME for
-   `chess.gulfrenderstudio.com` (the Worker route replaces it; if the
-   CNAME still exists the Worker route wins, but delete it to avoid
-   confusion).
+Cutover from the old 0.1.x setup (tunnel + Access — delete all of it;
+the old game does NOT migrate, the first Worker game starts fresh at
+revision 0, so finish or abandon any in-progress laptop game first):
+
+1. Deploy the Worker and verify it on the workers.dev URL first
+   (`curl https://<name>.<subdomain>.workers.dev/api/v1/health` →
+   `{"status":"ok","version":"0.2.0"}`), then on the custom-domain URL
+   from `.env` after the route attaches.
+2. In the Cloudflare dashboard → DNS, delete the tunnel CNAME for the
+   custom domain (the Worker route replaces it; if the CNAME still
+   exists the Worker route wins, but delete it to avoid confusion).
 3. Zero Trust → Access → Applications: delete the Chess Watch application
    and its Service Auth policy; Zero Trust → Access → Service Auth →
    Service Tokens: delete the service token.
 4. On the laptop: `sudo systemctl stop --now cloudflared-chess-watch`
    (and `disable` it), remove `/etc/cloudflared/chess-watch.yml` and the
    tunnel (`cloudflared tunnel delete chess-watch`), and remove any
-   `ufw` rules for tcp/8787 (`scripts/firewall/` is gone — the port is no
-   longer listened on at all).
-5. Delete the old server: the `server/` directory is already gone from
-   this repo; remove any leftover `server/.venv` and `data/` on the laptop.
-6. Verify: `curl https://chess.gulfrenderstudio.com/api/v1/health` →
-   `{"status":"ok","version":"0.2.0"}`, then a state call with each token.
-   The watches need a rebuild (`make config && make build`) — the bundle
-   no longer carries Access headers, and the version is 0.2.0.
-
-The old game is NOT migrated: the laptop SQLite database is not copied
-to the DO. The first game on the Worker starts fresh (revision 0). That
-is expected — finish or abandon any in-progress laptop game first.
+   `ufw` rules for tcp/8787 (the port is no longer listened on at all).
+5. Delete the old server leftovers on the laptop: `server/.venv` and
+   `data/` (`server/` itself is already gone from this repo).
+6. Rebuild both watches (`make config && make build`) — the bundle no
+   longer carries Access headers, and the version is 0.2.0.
 
 ## Tests
 
 ```bash
-npm test            # unit: fake-storage DO + rules + Worker entry (66 tests)
-npm run test:workers  # integration: real workerd + SQLite via SELF (4 tests)
+npm test              # unit: fake-storage DO + rules + Worker entry
+npm run test:workers  # integration: real workerd + SQLite via SELF
 ```
 
-The integration run uses `wrangler.test.toml` (fake tokens, no route);
-never deploy with it. `make test` at the repo root runs both suites plus
-the root JS vitest suite.
+The integration run uses `test-config/wrangler.test.toml` (fake tokens,
+no route); never deploy with it. It is independent of `worker/.dev.vars`
+— see the comment at the top of that file for why it lives in a
+subdirectory. `make test` at the repo root runs both suites plus the
+root JS vitest suite.

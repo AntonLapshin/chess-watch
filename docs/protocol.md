@@ -6,8 +6,8 @@ Worker. Base URL: `{CHESS_SERVER_URL}`. All endpoints require
 
 Backend: a Cloudflare Worker (`worker/src/index.js`) routing to a
 `ChessGame` Durable Object (`worker/src/game-do.js`) with SQLite storage.
-The API below is unchanged from the old FastAPI server it replaced — the
-watch app, side service, and web harness needed no protocol changes.
+The API is unchanged since 0.1.x — the watch app, side service, and web
+harness needed no protocol changes when the backend moved to the Worker.
 
 ## Auth
 

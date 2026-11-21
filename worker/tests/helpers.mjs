@@ -1,6 +1,5 @@
 // Shared helpers for the Durable Object unit tests: build a fresh
-// ChessGame over FakeSql and drive it through fetch(), mirroring
-// server/tests/conftest.py.
+// ChessGame over FakeSql and drive it through fetch().
 import { ChessGame } from "../src/game-do.js";
 import { fakeCtx } from "./fake-sql.mjs";
 

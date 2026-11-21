@@ -1,18 +1,17 @@
 # Chess Watch Worker — Cloudflare Worker + Durable Object backend.
-# Replaces the old FastAPI laptop server + Cloudflare Tunnel (see the
-# "Migration from the tunnel setup" note in the root README).
 #
-# Deploy:  wrangler deploy   (after `wrangler secret put` for both tokens)
-# Local:   wrangler dev      (reads worker/.dev.vars; port 8787)
+# Deploy:  make worker-deploy   (attaches the route from CHESS_SERVER_URL
+#          in the repo-root .env; see scripts/worker-deploy.sh)
+# Local:   make worker-dev      (reads worker/.dev.vars; port 8787)
+#
+# No route is declared here on purpose: the custom-domain route is
+# derived from CHESS_SERVER_URL at deploy time, so the hostname lives in
+# exactly one place (the .env value). `workers_dev = true` keeps the
+# workers.dev URL working for pre-cutover testing.
 name = "chess-watch"
 main = "src/index.js"
 compatibility_date = "2026-11-21"
 workers_dev = true
-
-# The domain is already a Cloudflare zone. Deploying with this route moves
-# chess.gulfrenderstudio.com from the (deleted) tunnel CNAME to the Worker.
-# Until the cutover, test on the workers.dev URL instead.
-route = { pattern = "chess.gulfrenderstudio.com/*", zone_name = "gulfrenderstudio.com" }
 
 [vars]
 CHESS_P1_NAME = "Aurora"

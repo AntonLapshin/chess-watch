@@ -4,19 +4,21 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
 
 ## Setup
 
-1. Register the app in console.zepp.com, put the numeric `appId` in
-   `app.json` (currently `1137599`).
-2. Generate two tokens, fill `.env` (watch build) with the same values
-   set as Worker secrets (`wrangler secret put CHESS_TOKEN_P1` /
-   `CHESS_TOKEN_P2`); for local testing use `worker/.dev.vars`.
-3. Deploy the Worker (`make worker-deploy`) or run it locally
+1. `make setup` — installs root + web + worker, copies `.env.example` →
+   `.env` and `worker/.dev.vars.example` → `worker/.dev.vars`.
+2. Generate two tokens, fill in `.env` (watch build) and
+   `worker/.dev.vars` (local dev) with the same values; set them as
+   Worker secrets with `make worker-secrets`.
+3. Register the app in console.zepp.com, put the numeric `appId` in
+   `app.json` (already `1137599` — only needed when starting from scratch).
+4. Deploy the Worker (`make worker-deploy`) or run it locally
    (`make worker-dev`, `http://localhost:8787` — watch builds still need
-   the public `https://chess.gulfrenderstudio.com` URL).
-4. `make config`.
-5. `make web` to test in the browser first (`?player=p1` / `?player=p2` tabs).
+   the public Worker URL from `.env`).
+5. `make config`.
+6. `make web` to test in the browser first (`?player=p1` / `?player=p2` tabs).
    It points the harness at the local Worker dev server by default; run
    `make worker-dev` in another terminal first.
-6. `make preview`, scan with the Zepp app on each watch, enable developer mode.
+7. `make preview`, scan with the Zepp app on each watch, enable developer mode.
 
 ## Checklist
 
@@ -63,7 +65,7 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
 - [ ] Airplane mode mid-game: red dot, board stays on the last good state;
       reconnect → state refreshes, no duplicate moves.
 - [ ] Remote/cellular: turn off Wi-Fi on the phone, keep the watch paired;
-      moves still sync through `https://chess.gulfrenderstudio.com`.
+      moves still sync through the deployed Worker URL.
 - [ ] Worker redeploy mid-game: game survives (DO SQLite); both watches
       resume polling and see the same position.
 - [ ] Square vs round layout: status bar fits, Menu button reachable,
@@ -82,7 +84,7 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
   unconfirmed until the Diagnostics screen is read.
 - Vibrator availability on both models.
 - Console icon acceptance (192×192 PNGs provided).
-- Production cutover: the Worker route on `chess.gulfrenderstudio.com`
+- Production cutover: the Worker route on the custom domain
   has not been deployed yet; the tunnel CNAME / Access application /
   `cloudflared-chess-watch` service still need deleting per
   `worker/README.md` § "Deploy + cutover".
@@ -94,15 +96,15 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
   (health, state, full flow with long-poll wake + offer + resign,
   duplicate id).
 - Smoke: health, auth, move, long-poll wake, dedupe, 409 conflict,
-  resign — all pass against a real `wrangler dev` server (see below).
-- JS vitest: 27 tests green (FEN parsing, both layouts, round corner radius,
+  resign — all pass against a local dev server (see below).
+- JS vitest: 25 tests green (FEN parsing, both layouts, round corner radius,
   HTTP bearer headers).
 - Web harness: `vite build` passes; headless-Chromium screenshots of both
   presets show the correct start position; tap e2→e4 in the browser reached
   the local Worker (ply 1, turn b); selection dots and last-move highlight
   verified visually.
 
-## Worker smoke (local `wrangler dev`)
+## Worker smoke (local dev server)
 
 ```bash
 cd worker && cp .dev.vars.example .dev.vars   # fill in test tokens
@@ -125,5 +127,4 @@ curl -s -X POST -H "Authorization: Bearer $P2" -H "Content-Type: application/jso
 # -> finished, result w, resign
 ```
 
-Remove `.dev.vars` afterwards if it holds anything but placeholders
-(it is gitignored, but never commit it).
+`.dev.vars` is gitignored and needed for local dev — never commit it.

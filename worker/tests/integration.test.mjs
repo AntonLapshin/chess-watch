@@ -1,7 +1,7 @@
 // Integration test: runs the real Worker + Durable Object (real workerd
 // SQLite) through @cloudflare/vitest-plugin. Run with:
 //   npm run test:workers
-// Test-only bearer tokens come from wrangler.test.toml (fake values,
+// Test-only bearer tokens come from test-config/wrangler.test.toml (fake values,
 // never real secrets).
 import { describe, it, expect } from "vitest";
 import { env, SELF, runDurableObjectAlarm } from "cloudflare:test";

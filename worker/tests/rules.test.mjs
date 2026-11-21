@@ -1,5 +1,4 @@
-// Rules tests: port of server/tests/test_game.py to chess.js 1.4.0 +
-// the persisted repetition map. The fivefold / 75-move cases MUST go
+// Rules tests: chess.js 1.4.0 + the persisted repetition map. The fivefold / 75-move cases MUST go
 // through the map path (chess.js has no such APIs — verified: both are
 // undefined in 1.4.0), including a takeback that changes the counts.
 import { describe, it, expect } from "vitest";
@@ -79,8 +78,7 @@ describe("terminal detection", () => {
   it("replay keeps castling rights", () => {
     const board = replay(["e2e4", "e7e5", "g1f3", "b8c6"]);
     expect(board.get("e1")).toMatchObject({ type: "k", color: "w" });
-    // FEN castling field still KQkq (python-chess's
-    // has_kingside_castling_rights equivalent).
+    // FEN castling field still KQkq (both kingside rights intact).
     expect(board.fen().split(" ")[2]).toBe("KQkq");
     // And castling is actually legal once the pieces are out of the way.
     const open = replay(["e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5"]);

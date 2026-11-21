@@ -1,6 +1,5 @@
-// Pure chess rules on top of chess.js 1.4.0 — the Worker-side port of
-// server/game.py (python-chess). No I/O, no storage: the Durable Object
-// owns persistence, this module only answers rules questions.
+// Pure chess rules on top of chess.js 1.4.0. No I/O, no storage: the
+// Durable Object owns persistence, this module only answers rules questions.
 //
 // chess.js 1.4.0 gaps this module works around (verified by measurement
 // against the installed package, 2026-11-21):
@@ -64,8 +63,7 @@ export function replay(uciMoves) {
  * Terminal / claimable detection for the position on `board`, with
  * repetition counts from the persisted map.
  * Returns { status, result, resultReason, claimable } — status is
- * "finished" for an automatic ending, else null. Mirrors
- * server/game.py terminal_and_claimable(), including check order:
+ * "finished" for an automatic ending, else null. Check order:
  * checkmate, stalemate, insufficient material, fivefold, 75-move, then
  * claimable threefold / fifty.
  */
@@ -117,8 +115,7 @@ export function kingSquare(board) {
 }
 
 /**
- * Plies to revert so it is the requester's turn again. Mirrors
- * server/game.py takeback_plies(): 1 ply if the requester just moved
+ * Plies to revert so it is the requester's turn again: 1 ply if the requester just moved
  * (opponent has not replied yet), 2 plies if the opponent replied,
  * null when no moves exist.
  */

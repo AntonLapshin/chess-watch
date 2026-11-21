@@ -1,5 +1,4 @@
-// Worker entry tests: config validation (port of
-// server/tests/test_config.py) + Bearer auth + routing to the DO stub.
+// Worker entry tests: config validation + Bearer auth + routing to the DO stub.
 // The DO itself is stubbed here; its behaviour is covered in
 // tests/game-do.test.mjs and tests/integration.test.mjs.
 import { describe, it, expect } from "vitest";
@@ -26,7 +25,7 @@ function stubEnv(overrides, doBody = { ok: true }, doStatus = 200) {
   };
 }
 
-describe("validateConfig (port of test_config.py)", () => {
+describe("validateConfig", () => {
   it("missing tokens refused", () => {
     expect(validateConfig({})).toMatch(/CHESS_TOKEN_P1/);
     expect(validateConfig({ CHESS_TOKEN_P1: P1 })).toMatch(/CHESS_TOKEN_P2/);
@@ -130,5 +129,29 @@ describe("worker fetch", () => {
     );
     expect(res.status).toBe(204);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("http://localhost:5173");
+  });
+
+  it("OPTIONS preflight is 204 without CORS headers for a disallowed origin", async () => {
+    const res = await worker.fetch(
+      new Request("http://test/api/v1/state", {
+        method: "OPTIONS",
+        headers: { Origin: "https://example.com" },
+      }),
+      stubEnv(), {},
+    );
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+
+  it("CHESS_CORS_ORIGINS (comma-separated) adds allowed origins", async () => {
+    const res = await worker.fetch(
+      new Request("http://test/api/v1/state", {
+        method: "OPTIONS",
+        headers: { Origin: "https://example.com" },
+      }),
+      stubEnv({ CHESS_CORS_ORIGINS: "https://example.com, https://other.example" }), {},
+    );
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://example.com");
   });
 });

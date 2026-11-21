@@ -1,4 +1,4 @@
-// Action tests: port of server/tests/test_actions.py — restart, takeback,
+// Action tests: restart, takeback,
 // resign, draw agreement, claim draw. Repetition claims go through the
 // persisted map: fivefold auto-draw and the takeback-changing-counts case
 // are exercised here at the API level (75-move / 50-move from a bare FEN

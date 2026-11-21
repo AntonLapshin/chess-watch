@@ -1,9 +1,8 @@
 // ChessGame Durable Object — the single source of truth for the game.
-// Port of server/app.py + server/game.py + server/db.py + server/notifier.py
-// (FastAPI + python-chess + SQLite) to a Cloudflare Durable Object with
-// SQLite storage (ctx.storage.sql) and chess.js.
+// Cloudflare Durable Object with SQLite storage (ctx.storage.sql) and
+// chess.js.
 //
-// Differences from the old server, all deliberate:
+// Design notes:
 //   - The board is NOT rebuilt by replaying moves per request. The live
 //     Chess instance is cached on the DO object between requests; on a
 //     cold start it is loaded from the stored FEN (cheap). A 200-ply
@@ -13,11 +12,11 @@
 //   - Repetition comes from a persisted position-count map (see
 //     src/rules.js): chess.js 1.4.0 has no fivefold/75-move APIs and its
 //     isThreefoldRepetition() is false after load(fen) (empty history).
-//   - Long-poll waiters are a per-DO list of resolvers + setTimeout, not
-//     an asyncio.Condition. Do NOT use blockConcurrencyWhile for the wait
-//     (30 s timeout + it blocks the DO). A pending long-poll keeps the DO
-//     non-hibernatable, so it bills duration while a watch page is open —
-//     expected; see worker/README.md for the free-tier numbers.
+//   - Long-poll waiters are a per-DO list of resolvers + setTimeout.
+//     Do NOT use blockConcurrencyWhile for the wait (30 s timeout + it
+//     blocks the DO). A pending long-poll keeps the DO non-hibernatable,
+//     so it bills duration while a watch page is open — expected; see
+//     worker/README.md for the free-tier numbers.
 //   - Offer expiry is BOTH lazy on read (as before) AND via setAlarm()
 //     on offer creation, so an expired offer clears even with no traffic.
 import { Chess } from "chess.js";
@@ -190,7 +189,7 @@ export class ChessGame {
     this.expireOffer(Date.now() / 1000);
   }
 
-  // -- state payload (mirrors server/app.py _build_state exactly) -----------
+  // -- state payload (see docs/protocol.md) ----------------------------------
   buildState(role, now) {
     const g = this.game;
     const board = this.board;

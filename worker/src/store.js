@@ -1,12 +1,12 @@
 // SQLite persistence for the ChessGame Durable Object, via
 // ctx.storage.sql (exec with parameter binding — exec serves SELECTs too; there is no .query() in workerd SqlStorage).
 //
-// Schema mirrors server/db.py so the port is reviewable — same table and
-// column names, plus one addition: games.positions_json, the persisted
-// repetition map (trimmed FEN -> count) that chess.js cannot rebuild from
-// a bare FEN (see src/rules.js). The single game row (games.id = 1),
-// moves and actions tables with UNIQUE client ids for idempotency, and
-// meta for the schema version are otherwise unchanged.
+// Schema: same table/column names as the 0.1.x backend (so the 0.2.0
+// port stayed reviewable), plus one addition: games.positions_json, the
+// persisted repetition map (trimmed FEN -> count) that chess.js cannot
+// rebuild from a bare FEN (see src/rules.js). The single game row
+// (games.id = 1), moves and actions tables with UNIQUE client ids for
+// idempotency, and meta for the schema version are otherwise unchanged.
 //
 // All functions take the `sql` object (ctx.storage.sql) so unit tests can
 // substitute a fake implementing the same exec interface.

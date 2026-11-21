@@ -1,4 +1,4 @@
-// API tests: port of server/tests/test_api.py — auth (via DO role header),
+// API tests: auth (via DO role header),
 // turns, revisions, idempotency, long-poll, offers. The DO trusts the
 // x-chess-role header the Worker sets after Bearer auth; Worker-level auth
 // is covered in tests/index.test.mjs.

@@ -7,7 +7,7 @@
     "dev": "wrangler dev",
     "test": "vitest run --config vitest.config.mjs",
     "test:workers": "vitest run --config vitest.workers.config.mjs",
-    "deploy": "wrangler deploy",
+    "deploy": "bash ../scripts/worker-deploy.sh",
     "tail": "wrangler tail"
   },
   "dependencies": {

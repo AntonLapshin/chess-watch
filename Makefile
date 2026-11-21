@@ -2,7 +2,13 @@
 # `make web` points the browser harness at the local Worker dev server
 # (http://localhost:8787) unless CHESS_SERVER_URL is set in the environment
 # or on the command line, e.g.:
-#   CHESS_SERVER_URL=https://chess.gulfrenderstudio.com make web
+#   CHESS_SERVER_URL=<your Worker URL> make web
+#
+# wrangler is a worker devDependency (installed by `make setup` into
+# worker/node_modules/.bin); every wrangler invocation below goes through
+# `npx` from worker/ or a make target — no global install needed. (Or:
+# `cd worker && npx wrangler <cmd>`, or `npm install -g wrangler` if you
+# prefer bare commands.)
 CHESS_SERVER_URL ?= http://localhost:8787
 
 .PHONY: help setup config pieces icons web build preview test worker-dev worker-test worker-deploy worker-secrets worker-logs
@@ -16,11 +22,11 @@ help:
 	@echo "  make web      Vite dev server (browser harness, local Worker)"
 	@echo "  make build    config + zeus build"
 	@echo "  make preview  config + zeus preview (QR for the Zepp app)"
-	@echo "  make worker-dev      wrangler dev (local Worker, port 8787)"
+	@echo "  make worker-dev      local Worker dev server (port 8787)"
 	@echo "  make worker-test     worker unit + integration tests"
-	@echo "  make worker-deploy   wrangler deploy"
-	@echo "  make worker-secrets  print the wrangler secret put commands"
-	@echo "  make worker-logs     wrangler tail"
+	@echo "  make worker-deploy   deploy the Worker (route from CHESS_SERVER_URL)"
+	@echo "  make worker-secrets  set the production bearer tokens (interactive)"
+	@echo "  make worker-logs     tail the deployed Worker logs"
 	@echo "  make test     root vitest + worker vitest"
 
 setup:
@@ -31,7 +37,8 @@ setup:
 	SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm install
 	npm install --prefix web
 	npm install --prefix worker
-	@echo "setup done — fill in .env and worker/.dev.vars, then: make config"
+	@echo "setup done — wrangler $$(./worker/node_modules/.bin/wrangler --version 2>/dev/null || echo '(not found)') is available via make worker-* / cd worker && npx wrangler"
+	@echo "next: fill in .env and worker/.dev.vars, then: make config"
 
 config:
 	node scripts/gen-app-config.mjs
@@ -65,13 +72,13 @@ worker-test:
 	npm run test:workers --prefix worker
 
 worker-deploy:
-	npm run deploy --prefix worker
+	bash scripts/worker-deploy.sh
 
 worker-secrets:
-	@echo "Set the production bearer tokens (values never printed here):"
-	@echo "  wrangler secret put CHESS_TOKEN_P1   # from worker/.dev.vars or .env"
-	@echo "  wrangler secret put CHESS_TOKEN_P2"
-	@echo "Run from worker/ or with: cd worker && wrangler secret put ..."
+	@echo "Set the production bearer tokens (values never printed here)."
+	@echo "You will be prompted for each token; paste the values from .env."
+	cd worker && npx wrangler secret put CHESS_TOKEN_P1
+	cd worker && npx wrangler secret put CHESS_TOKEN_P2
 
 worker-logs:
 	npm run tail --prefix worker

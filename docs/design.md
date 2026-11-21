@@ -71,7 +71,7 @@ piece 37. Status bar and 160×40 Menu button per `page/layout.js`.
 
 - One game row (`games.id = 1`), `moves` and `actions` tables with `UNIQUE`
   client ids for idempotency, `meta` for schema version — same table and
-  column names as the old `server/db.py`, plus `games.positions_json`
+  column names as the 0.1.x backend, plus `games.positions_json`
   (the persisted repetition map, see below). DO SQLite via
   `ctx.storage.sql.exec()` — note there is no `.query()` in workerd's
   `SqlStorage`; `exec()` serves SELECTs too. The migration must declare
@@ -134,12 +134,7 @@ checker + knight mark (`scripts/gen-icons.mjs`).
    with no moves" or "offerer answering their own offer"; the server uses
    `takeback_unavailable` and `not_recipient` (409), documented in
    `docs/protocol.md`.
-4. **`uv` not required (historical).** When the backend was a Python
-   server, `uv` was not installed in this environment, so the venv was
-   created with `python3 -m venv` + `pip`. The Python server is gone
-   (0.2.0, Worker + Durable Object); this note is kept for the history
-   of the old `server/` tree.
-5. **Web harness: local `WatchPage` copy.** The runner's `WatchPage`
+4. **Web harness: local `WatchPage` copy.** The runner's `WatchPage`
    imports `_reset`/`_collect` from `zepp-web-runner/shims/hmUI`, while
    the page imports `@zos/ui` (plugin-resolved to the same file). Vite
    serves those as two URLs (one with `?v=`, one without) — two module
@@ -148,11 +143,7 @@ checker + knight mark (`scripts/gen-icons.mjs`).
    runner's component that imports `_reset`/`_collect` from `@zos/ui`,
    guaranteeing one instance. `optimizeDeps.exclude` also keeps the shims
    out of the pre-bundle.
-6. **Config file location (historical).** The old Python server read
-   `server/.env` (or the root `.env`); `CHESS_ENV_FILE` overrode. The
-   Worker reads secrets (`wrangler secret put`) or `worker/.dev.vars`
-   instead; the root `.env.example` covers the watch build only.
-7. **Web preset switch black screen.** Switching Bip 6 ↔ Active 3 in
+5. **Web preset switch black screen.** Switching Bip 6 ↔ Active 3 in
    `make web` rendered a black frame, while loading `?device=active-3`
    directly worked. Root cause was not the round layout: the preset
    switcher remounts `WatchPage` (keyed wrapper), and React runs the old
@@ -162,13 +153,13 @@ checker + knight mark (`scripts/gen-icons.mjs`).
    but never delivered to React state. `WatchPage.jsx` now re-asserts
    `_triggerRender` inside its effect (post-cleanup) and the cleanup only
    clears it if it is still its own setter.
-8. **Build stamp.** `scripts/gen-app-config.mjs` writes
+6. **Build stamp.** `scripts/gen-app-config.mjs` writes
    `build: { at, commit }` (git HEAD, or null outside a checkout) into the
    generated config, so DIAG can prove which commit the installed bundle
    came from. `dist/*.zab` is gitignored: a build artifact embeds the real
    bearer tokens and must never be committed (one was, in
    `c6346a3`, and was removed again here; it stays in that commit's history).
-9. **Side-service link verified against the official sample, not just
+7. **Side-service link verified against the official sample, not just
    the docs.** The 0.1.1 build on a real Active 3 reported `Diag: side
    unreachable`, Err 1 (ZML BLE shake timeout), `Poll err: none` — the
    last line was a lie: `page/index.js` `onState()` cleared `_netError`
@@ -195,33 +186,21 @@ checker + knight mark (`scripts/gen-icons.mjs`).
    bridge is not answering. `app.json` `targets` uses the key `default`
    where the sample uses `common`; the built `.zab` flattens the module
    mapping, so the key does not reach the device and was left as-is.
-10. **Worker + Durable Object backend (0.2.0).** The FastAPI laptop
-    server + Cloudflare Tunnel + Access setup was replaced by
-    `worker/` (Worker entry + `ChessGame` DO + chess.js). The API is
-    unchanged, so no watch-side protocol change was needed. Port notes:
-    the DO loads the board from the stored FEN and keeps a live `Chess`
-    instance cached (never a full replay per request — 200 plies cost
-    ~22–38 ms vs the Free 10 ms CPU cap); repetition comes from a persisted
-    position-count map because chess.js 1.4.0 has no fivefold/75-move
-    APIs and `isThreefoldRepetition()` is false after `load(fen)`;
-    offer expiry is lazy on read AND via `setAlarm()`; long-poll waiters
-    are a resolver list, never `blockConcurrencyWhile`. Two workerd
-    gotchas found by the integration test: the migration must declare
-    `new_sqlite_classes` (not `new_classes`) or `ctx.storage.sql`
-    throws, and `SqlStorage` has no `.query()` — `exec()` serves
-    SELECTs too. Test tooling notes: `@cloudflare/vitest-pool-workers`
-    was renamed to `@cloudflare/vitest-plugin` (0.23.0 is deprecated);
-    that plugin needs vitest 4, while the repo root pins vitest 2, so
-    `worker/` is a separate package with its own vitest 4 install and
-    `worker/.npmrc` sets `legacy-peer-deps=true` (npm 10.9's arborist
-    crashes resolving the vitest 4 peer tree otherwise); the plugin
-    ignores `miniflare.vars` from the vitest config, so the integration
-    run uses a separate `wrangler.test.toml` with fake tokens; and the
-    pool shares DO storage across tests in one file (per-file, not
-    per-test isolation), so `tests/integration.test.mjs` is ordered to
-    build on a single game. One carried-over quirk: `recent_moves[].ply`
-    is numbered within the last-6 window (1..6), exactly as the old
-    server computed it — clients only display `san`.
+8. **Worker + Durable Object backend (0.2.0).** The 0.1.x laptop-server
+    setup was replaced by `worker/` (Worker entry + `ChessGame` DO +
+    chess.js); the API is unchanged, so no watch-side protocol change was
+    needed. Details live in "Worker internals" above and `worker/README.md`
+    (FEN-load, never replay; persisted repetition map; `setAlarm()` offer
+    expiry; resolver-list long-poll). Test tooling: `@cloudflare/vitest-plugin`
+    needs vitest 4 while the repo root pins vitest 2, so `worker/` is a
+    separate package with its own vitest 4 install and `worker/.npmrc` sets
+    `legacy-peer-deps=true`; the integration run uses
+    `test-config/wrangler.test.toml` with fake tokens (see the comment at
+    the top of that file for why it lives in a subdirectory), and the pool
+    shares DO storage per file, so `tests/integration.test.mjs` is ordered
+    to build on a single game. One carried-over quirk: `recent_moves[].ply`
+    is numbered within the last-6 window (1..6), exactly as the 0.1.x
+    backend computed it — clients only display `san`.
 
 ## Verification items (plan §10) — status
 
@@ -235,7 +214,7 @@ checker + knight mark (`scripts/gen-icons.mjs`).
    `res.body` as string or object plus the browser `.json()` path, and a
    missing `res.status` is inferred from whether the body parsed. The
    2026-11-21 14:03 preview build's bundled `app-side.js` was inspected
-   and does contain the object-fetch shape, DIAG, and the Worker hostname —
+   and does contain the object-fetch shape, DIAG, and the Worker URL —
    so a watch still showing the offline board with the default Aurora/Sam
    names is running an older install or never reaches the side service
    (see the Diagnostics decision table in the README); on-device fetch
