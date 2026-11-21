@@ -92,7 +92,9 @@ make setup   # installs root + web + worker, copies .env.example -> .env
 Generate tokens with `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`
 (twice). The SAME tokens go in the repo-root `.env` (watch build),
 `worker/.dev.vars` (local dev), and the Worker secrets
-(`make worker-secrets`).
+(`make worker-secrets`). Put the player names in `.env` and
+`worker/.dev.vars` too (`CHESS_P1_NAME` / `CHESS_P2_NAME`) — the deploy
+passes them to the Worker, and local dev reads them from `.dev.vars`.
 
 ## Local dev
 
@@ -128,6 +130,14 @@ Optional `CHESS_WORKER_ZONE` (in `.env` or the environment) is passed as
 `CHESS_SERVER_URL` is unset, localhost, or a `*.workers.dev` URL, the
 deploy is plain (workers.dev URL only). To validate the deploy without
 deploying or logging in: `bash scripts/worker-deploy.sh --dry-run`.
+
+Player names come from `.env` too: the script passes `CHESS_P1_NAME` /
+`CHESS_P2_NAME` as `--var` flags on every deploy, overriding the
+Aurora/Sam defaults in `wrangler.toml` `[vars]`. Without `--var` a deploy
+would silently revert the board names to those defaults — that is what
+happened on the first 0.2.0 deploy. Dashboard alternative: Workers &
+Pages → chess-watch → Settings → Variables → add `CHESS_P1_NAME` /
+`CHESS_P2_NAME` as plain Variables (not Secrets).
 
 Dashboard half of the deploy (dash.cloudflare.com; also summarized in
 the root README): the custom domain must be a Cloudflare zone (DNS

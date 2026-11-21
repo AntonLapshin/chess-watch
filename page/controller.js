@@ -8,7 +8,7 @@ const RETRY_MAX_MS = 10000;
 const SEND_RETRIES = 3;
 
 export class Controller {
-  constructor({ role, request, onState, onConnection, onToast, onPollError }) {
+  constructor({ role, request, onState, onConnection, onToast, onPollError, requestTimeoutMs, retryBaseMs, retryMaxMs }) {
     this.role = role;
     this.request = request;
     this.onState = onState;
@@ -23,16 +23,49 @@ export class Controller {
     this.attempts = 0;
     this.lastError = null;
     this._pollTimer = null;
-    this._retryDelay = RETRY_BASE_MS;
+    this._retryBaseMs = retryBaseMs ?? RETRY_BASE_MS;
+    this._retryMaxMs = retryMaxMs ?? RETRY_MAX_MS;
+    this._retryDelay = this._retryBaseMs;
     this._pollInFlight = false;
     this._sendQueue = []; // [{ kind, payload, clientId, attempts }]
     this._diagInFlight = false;
+    // Per-request timeouts (ms). Polls run a 20 s server long-poll behind
+    // the 15 s side-service fetch timeout, so 40 s leaves margin; sends
+    // get 25 s (a genuine server timeout surfaces first as code "timeout"
+    // from the side service at 15 s). Overridable for tests.
+    this.requestTimeoutMs = { poll: 40000, send: 25000, ...(requestTimeoutMs || {}) };
+  }
+
+  // BasePage.request has no timeout (the only timer in the ZML messaging
+  // plugin is the 5 s BLE shake timer), so a lost BLE response used to
+  // hang the await forever: a hung MOVE left _pendingMove set on the page
+  // (no further taps accepted) and a hung poll left _pollInFlight set (no
+  // further polls), while polls/actions kept working — "connected but
+  // can't play" with no toast. Race every request against a timer; on
+  // timeout reject with { code: "timeout" }, which the existing paths
+  // already handle (poll: backoff retry; send: _sendWithRetry retries,
+  // then a toast; diag: { error: "timeout" }).
+  _timedRequest(payload, timeoutMs) {
+    let timer = null;
+    const req = this.request(payload);
+    // The race may already have timed out by the time the request later
+    // rejects; swallow that rejection so it never surfaces as unhandled.
+    req.catch(() => {});
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(
+        () => reject({ code: "timeout", message: "Request timed out" }),
+        timeoutMs,
+      );
+    });
+    return Promise.race([req, timeout]).finally(() => {
+      if (timer) clearTimeout(timer);
+    });
   }
 
   start() {
     if (this.running) return;
     this.running = true;
-    this._retryDelay = RETRY_BASE_MS;
+    this._retryDelay = this._retryBaseMs;
     this._poll();
   }
 
@@ -66,13 +99,13 @@ export class Controller {
     this._pollInFlight = true;
     this.attempts += 1;
     try {
-      const res = await this.request({
-        method: "GET_STATE",
-        params: { role: this.role, since: this.revision, wait: 20 },
-      });
+      const res = await this._timedRequest(
+        { method: "GET_STATE", params: { role: this.role, since: this.revision, wait: 20 } },
+        this.requestTimeoutMs.poll,
+      );
       this._pollInFlight = false;
       if (!res || !res.game) throw new Error("bad state");
-      this._retryDelay = RETRY_BASE_MS;
+      this._retryDelay = this._retryBaseMs;
       this.state = res;
       this.revision = res.revision;
       this.lastError = null;
@@ -96,7 +129,7 @@ export class Controller {
         this.onState(this.state);
       }
       const delay = this._retryDelay;
-      this._retryDelay = Math.min(this._retryDelay * 2, RETRY_MAX_MS);
+      this._retryDelay = Math.min(this._retryDelay * 2, this._retryMaxMs);
       this._schedulePoll(delay);
     }
   }
@@ -118,7 +151,10 @@ export class Controller {
   async runDiag() {
     this._diagInFlight = true;
     try {
-      const res = await this.request({ method: "DIAG", params: { role: this.role } });
+      const res = await this._timedRequest(
+        { method: "DIAG", params: { role: this.role } },
+        this.requestTimeoutMs.send,
+      );
       return res || { error: "unknown" };
     } catch (e) {
       return { error: (e && e.code) || "unknown", message: (e && e.message) || String(e) };
@@ -157,7 +193,7 @@ export class Controller {
     let lastErr = null;
     for (let attempt = 0; attempt < SEND_RETRIES; attempt++) {
       try {
-        const res = await this.request({ method, params: payload });
+        const res = await this._timedRequest({ method, params: payload }, this.requestTimeoutMs.send);
         if (!res || !res.game) throw new Error("bad response");
         this.state = res;
         this.revision = res.revision;

@@ -12,6 +12,14 @@
 # wrangler 4.x and needs --x-route-zones). Dashboard alternative:
 # Workers & Pages -> chess-watch -> Settings -> Triggers -> Add route.
 #
+# Player names come from .env too (CHESS_P1_NAME / CHESS_P2_NAME) and are
+# passed as --var on EVERY deploy (both branches below): the wrangler.toml
+# [vars] defaults (Aurora/Sam) are only a fallback, and without --var a
+# deploy would silently revert the board names to them. --var overrides
+# the toml vars (verified: with --var, wrangler dev state reports the
+# --var names, not the toml defaults). Names are single words; a name
+# containing ":" would confuse the KEY:VALUE split.
+#
 # Pass --dry-run to validate the deploy (bundling, bindings, route) without
 # deploying or needing a login: scripts/worker-deploy.sh --dry-run
 set -euo pipefail
@@ -30,13 +38,21 @@ if [[ "$URL" =~ ^https://([^/:]+) ]]; then
   HOST="${BASH_REMATCH[1]}"
 fi
 
+NAME_ARGS=()
+if [ -n "${CHESS_P1_NAME:-}" ]; then
+  NAME_ARGS+=(--var "CHESS_P1_NAME:${CHESS_P1_NAME}")
+fi
+if [ -n "${CHESS_P2_NAME:-}" ]; then
+  NAME_ARGS+=(--var "CHESS_P2_NAME:${CHESS_P2_NAME}")
+fi
+
 if [ -z "$HOST" ] || [[ "$HOST" == *.workers.dev ]] \
     || [[ "$HOST" == localhost || "$HOST" == 127.0.0.1 ]]; then
   echo "worker-deploy: no custom domain in CHESS_SERVER_URL ($URL) — plain deploy (workers.dev URL only)."
-  exec npx wrangler deploy "$@"
+  exec npx wrangler deploy "${NAME_ARGS[@]}" "$@"
 fi
 
-ARGS=(--route "$HOST/*")
+ARGS=(--route "$HOST/*" "${NAME_ARGS[@]}")
 if [ -n "${CHESS_WORKER_ZONE:-}" ]; then
   ARGS+=(--x-route-zones --zone "$CHESS_WORKER_ZONE")
 fi

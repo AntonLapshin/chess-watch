@@ -65,6 +65,19 @@ function showToast(text) {
 function diagLines() {
   const lines = [];
   lines.push(`Role: ${_role} (${_role === "p1" ? "White" : "Black"})`);
+  // Live game state, so a "can't play" report can be told apart from a
+  // link failure at a glance. Only for real (non-offline) states: the
+  // offline fallback is a fixed start position, and its Turn/Legal would
+  // be meaningless. Lines stay <= ~32 chars (see renderDiag).
+  if (_state && !_state._offline) {
+    const g = _state.game;
+    const turnName = g.turn === "w" ? "White" : "Black";
+    lines.push(`Turn: ${turnName}${g.turn === _state.you.color ? " (you)" : ""}`);
+    lines.push(`Ply: ${g.ply}`);
+    lines.push(`Status: ${g.status}`);
+    lines.push(`Legal: ${(g.legal_moves || []).length}`);
+    lines.push(`Rev: ${_state.revision}`);
+  }
   if (_diag && !_diag.error) {
     const b = _diag.build || {};
     lines.push(`Build: ${b.commit || "?"}${_diag.version ? " v" + _diag.version : ""}`);
@@ -168,10 +181,15 @@ async function doMove(from, to, promotion) {
   _pendingMove = true;
   _selected = null;
   _page && _page.render();
-  const res = await _controller.submitMove(from, to, promotion);
-  _pendingMove = false;
-  if (!res.ok) {
-    showToast(errorMessage(res.code, res.message));
+  try {
+    const res = await _controller.submitMove(from, to, promotion);
+    if (!res.ok) {
+      showToast(errorMessage(res.code, res.message));
+    }
+  } finally {
+    // Belt-and-braces: submitMove must never leave _pendingMove set (a
+    // throw here used to wedge every later tap with no toast).
+    _pendingMove = false;
   }
   _page && _page.render();
 }

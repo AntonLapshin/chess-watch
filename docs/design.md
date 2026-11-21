@@ -60,6 +60,22 @@ First poll sends `since: -1` so it returns immediately (a fresh game has
 revision 0). A revision conflict triggers an immediate refresh, never a
 retry. Failed sends retry with the same client id (idempotent server-side).
 
+Request timeouts (0.2.1): `BasePage.request` has no timeout — the only
+timer in the ZML messaging plugin is the 5 s BLE shake timer — so a lost
+BLE response used to hang the await forever. A hung MOVE left
+`_pendingMove` set (no further taps accepted) and a hung poll left
+`_pollInFlight` set (no further polls), while polls and actions kept
+working: "connected but can't play" with no toast. The controller now
+races every request against a timer — polls 40 s (`wait: 20` + the 15 s
+side-service fetch timeout + margin), MOVE/ACTION/DIAG 25 s — rejecting
+with `{ code: "timeout" }`, which the existing paths already handle
+(poll: backoff retry; send: `_sendWithRetry` retries, then a toast).
+`doMove` also resets `_pendingMove` in a `finally`. The Diagnostics
+overlay shows the live game state (`Turn:`, `Ply:`, `Status:`, `Legal:`,
+`Rev:`) for real states only, so a turn/role problem can be told apart
+from a move-submit problem; the panel uses a tighter 22 px line step so
+all 14 lines still fit the 450 px Bip 6 display.
+
 ## Layout
 
 Physical pixels from `getDeviceInfo()`, no `designWidth` (the runner
@@ -102,7 +118,13 @@ piece 37. Status bar and 160×40 Menu button per `page/layout.js`.
   `.dev.vars` for local dev). Missing, equal, < 24-char, or `CHANGEME`
   tokens fail every `/api/v1/*` request with 500 `config_error` — there
   is no deploy-time startup to refuse in, so the failure surfaces on
-  first request instead.
+  first request instead. Player names are Worker vars: the deploy script
+  passes `CHESS_P1_NAME` / `CHESS_P2_NAME` from the root `.env` as
+  `--var` flags on every deploy, overriding the Aurora/Sam defaults in
+  `wrangler.toml` `[vars]` (without `--var` a deploy silently reverts
+  the board names to the defaults — the first 0.2.0 deploy did exactly
+  that, while the Diagnostics names, which come from the watch bundle
+  config, were correct).
 
 ## Pieces
 

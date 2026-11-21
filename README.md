@@ -19,7 +19,10 @@ resign is immediate. Browser development through `zepp-web-runner`
 2. Generate two tokens:
    `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` (twice).
    Fill in `.env` — `CHESS_SERVER_URL` (the Worker URL), both tokens,
-   names — and put the SAME tokens in `worker/.dev.vars`.
+   and the player names (`CHESS_P1_NAME` / `CHESS_P2_NAME`) — and put
+   the SAME tokens and names in `worker/.dev.vars`. The deploy passes
+   the names to the Worker (see § Deploy in `worker/README.md`); the
+   `wrangler.toml` defaults (Aurora/Sam) are only a fallback.
 3. `make worker-login` (first time only — authorizes wrangler in your
    Cloudflare account), `make worker-secrets` — set the production
    tokens (interactive), `make worker-deploy` — deploy the Worker
@@ -54,6 +57,9 @@ in `worker/README.md` § Deploy + cutover):
   the deployment is listed and the version is 0.2.0. Settings →
   Variables → Secrets shows `CHESS_TOKEN_P1` / `CHESS_TOKEN_P2`
   (the dashboard alternative to `make worker-secrets`); Settings →
+  Variables (plain Variables, not Secrets) holds `CHESS_P1_NAME` /
+  `CHESS_P2_NAME` — the dashboard alternative to the `--var` flags
+  `make worker-deploy` passes from `.env`; Settings →
   Triggers → Routes shows the custom-domain route (the alternative to
   the `--route` the deploy script passes). Observability → Logs (or
   `make worker-logs`) is where runtime errors surface.
@@ -106,6 +112,9 @@ verbatim; the table below is what they mean.
 | `Ping: ok` + `Last: state unauthorized` | Tokens differ between `.env` and the Worker secrets | Copy the same tokens into both (`make worker-secrets`) and rebuild |
 | `Ping: FAIL` + `Last: state timeout` / `network` | Phone has no route to the Worker, or the Worker is down | `curl $CHESS_SERVER_URL/api/v1/health` from a laptop; `make worker-logs` |
 | `Ping: ok` + `Last: state ok` but the board stays offline | Poll failing after a good ping (BLE flakiness, stale revision) | Wait through a retry cycle; the `Last` line after the next poll is the new evidence |
+| `Turn:` shows the other color, or `Legal: 0`, when you expect to move | Not your turn — or the wrong role (both watches picked the same player) | Check the Role line on both watches; Menu → Switch player on the one that is wrong. The other watch should show the opposite turn |
+| `Last: move timeout` (or another code) right after a tap that did nothing | The move never reached the Worker (lost BLE response — the page now times out after 25 s instead of hanging) | Re-run Test link AFTER attempting the move, so `Last` shows the move outcome, and report the lines verbatim |
+| `Names: Aurora / Sam` on the board while Test link shows the right names | The Worker was deployed without the names — `wrangler.toml` defaults win when no `--var` is passed | `make worker-deploy` again (it passes `CHESS_P1_NAME` / `CHESS_P2_NAME` from `.env` on every deploy) |
 
 The Worker can be fine while the watch is offline — the CLI health check
 only proves the Worker side. The Diagnostics screen is the only evidence
@@ -122,13 +131,15 @@ still the placeholders).
 ## Verification status (2026-11-21)
 
 Verified: worker unit tests 68/68, integration tests 4/4 (real workerd +
-SQLite), JS vitest 25/25, `vite build` pass, `zeus build` pass (0.2.0,
-all 4 targets), headless-Chromium screenshots of both presets, a browser
-tap e2→e4 reaching the local Worker (ply 1, turn b), preset switching
-Bip 6 ↔ Active 3 (board re-renders both ways), and Menu → Test link
-opening the Diagnostics overlay on both presets, including with the
-Worker down.
+SQLite), JS vitest 29/29 (incl. 4 controller timeout tests), `vite build`
+pass, `zeus build` pass (0.2.1, all 4 targets), headless-Chromium
+screenshots of both presets, a browser tap e2→e4 reaching the local
+Worker (ply 1, turn b), preset switching Bip 6 ↔ Active 3 (board
+re-renders both ways), and Menu → Test link opening the Diagnostics
+overlay on both presets, including with the Worker down. The deployed
+Worker is healthy (`/api/v1/health` → `{"status":"ok","version":"0.2.0"}`)
+and the tunnel/DNS cutover is done.
 
-Not yet verified on-device: the 0.2.0 build has not been installed on
+Not yet verified on-device: the 0.2.1 build has not been installed on
 either watch yet (see `docs/manual-test.md`). Also unconfirmed: Vibrator
 availability, console icon acceptance.

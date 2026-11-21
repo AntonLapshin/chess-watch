@@ -131,14 +131,17 @@ export function renderResult(hmUI, widgets, layout, state, role, opts) {
 // the lines on the Connecting screen, this panel is an overlay, so a poll
 // failure swapping in the offline board cannot wipe it, and it is reachable
 // from Menu at any time — including while the board is showing. Lines are
-// kept short (<= ~32 chars) so they fit the round panel at 16 px.
+// kept short (<= ~32 chars) so they fit the round panel at 16 px. The
+// lines use a tighter 22 px step (16 px text) so the panel still fits all
+// 14 lines of a full online diagnostic on the 450 px Bip 6 display
+// (title + lines + buttons = 104 + 14*22 + 48 = 460, capped at 426).
 export function renderDiag(hmUI, widgets, layout, lines, opts) {
   backdrop(hmUI, widgets, layout, opts.onClose);
-  const h = Math.min(layout.height - 24, 112 + lines.length * 24 + 52);
+  const h = Math.min(layout.height - 24, 104 + lines.length * 22 + 48);
   const p = panel(hmUI, widgets, layout, h);
   text(hmUI, widgets, p.x, p.y + 14, p.w, 28, opts.busy ? "Testing…" : "Link test", 22);
   lines.forEach((line, i) => {
-    text(hmUI, widgets, p.x + 12, p.y + 48 + i * 24, p.w - 24, 22, line, 16, THEME.textSecondary);
+    text(hmUI, widgets, p.x + 12, p.y + 44 + i * 22, p.w - 24, 22, line, 16, THEME.textSecondary);
   });
   const by = p.y + h - 52;
   const half = Math.floor((p.w - 60) / 2);

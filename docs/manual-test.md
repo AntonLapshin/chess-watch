@@ -8,7 +8,11 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
    `.env` and `worker/.dev.vars.example` → `worker/.dev.vars`.
 2. Generate two tokens, fill in `.env` (watch build) and
    `worker/.dev.vars` (local dev) with the same values; set them as
-   Worker secrets with `make worker-secrets`.
+   Worker secrets with `make worker-secrets`. Fill in the player names
+   (`CHESS_P1_NAME` / `CHESS_P2_NAME`) in `.env` and `worker/.dev.vars`
+   too — `make worker-deploy` passes them to the Worker as `--var`
+   flags; without them the board shows the `wrangler.toml` defaults
+   (Aurora/Sam).
 3. Register the app in console.zepp.com, put the numeric `appId` in
    `app.json` (already `1137599` — only needed when starting from scratch).
 4. Deploy the Worker (`make worker-deploy`) or run it locally
@@ -30,7 +34,13 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
       persists across restarts. Menu → Switch player returns to the picker.
 - [ ] Menu → Test link shows the Diagnostics overlay (build commit matches
       `git rev-parse HEAD`, names/host match `.env`); with the Worker up it
-      reports `Ping: ok` and `Last: state ok`. Close returns to the board.
+      reports `Ping: ok` and `Last: state ok`. It also shows the live game
+      state — `Turn:`, `Ply:`, `Status:`, `Legal:`, `Rev:` — so a "can't
+      play" report can be told apart from a link failure: `Turn:` showing
+      the other color or `Legal: 0` means not your turn (or the wrong
+      role — check Role on both watches); `Last: move <code>` after a
+      failed tap is the move outcome. To capture a failed move, run Test
+      link AFTER attempting the move. Close returns to the board.
 - [ ] If Test link reports Err 1 / `Diag: side unreachable`, check the
       phone before touching the Worker: Zepp app → Profile → Settings →
       About → tap the Zepp icon 7× (Developer Mode) → Mini Program icon
@@ -74,31 +84,34 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
 
 ## Open verification items (not yet done on-device)
 
-- 0.2.0 build install: `zeus build` passes (0.2.0, all targets) with the
+- 0.2.1 build install: `zeus build` passes (0.2.1, all targets) with the
   registered `appId` 1137599. Install via `make preview` on both
   watches and read Menu → Test link first (see the README decision table).
   For a shake timeout (Err 1) also read the Zepp app's Side Service log
-  screen — see the checklist above.
+  screen — see the checklist above. The 0.2.0 build is already installed
+  on both watches and the Worker is deployed and healthy; 0.2.1 fixes the
+  board names (deploy with `make worker-deploy` first) and adds page-side
+  request timeouts plus the game-state lines in Diagnostics.
 - `fetch` response shape on the side service (`res.status` vs `res.body`
   only) — the client parses defensively, but on-device behaviour is
   unconfirmed until the Diagnostics screen is read.
 - Vibrator availability on both models.
 - Console icon acceptance (192×192 PNGs provided).
-- Production cutover: the Worker route on the custom domain
-  has not been deployed yet; the tunnel CNAME / Access application /
-  `cloudflared-chess-watch` service still need deleting per
-  `worker/README.md` § "Deploy + cutover".
+- Production cutover: done 2026-11-21 — the Worker is deployed (route on
+  the custom domain, `/api/v1/health` → `{"status":"ok","version":"0.2.0"}`),
+  the tunnel is wiped and its DNS deleted. The checklist in
+  `worker/README.md` § "Deploy + cutover" is now a record, not a todo.
 
 ## Already verified (browser + Worker, 2026-11-21)
 
-- Worker unit tests: 66 tests green (rules, DO API/actions, Worker entry).
+- Worker unit tests: 68 tests green (rules, DO API/actions, Worker entry).
 - Worker integration tests: 4 tests green through real workerd + SQLite
   (health, state, full flow with long-poll wake + offer + resign,
   duplicate id).
 - Smoke: health, auth, move, long-poll wake, dedupe, 409 conflict,
   resign — all pass against a local dev server (see below).
-- JS vitest: 25 tests green (FEN parsing, both layouts, round corner radius,
-  HTTP bearer headers).
+- JS vitest: 29 tests green (FEN parsing, both layouts, round corner radius,
+  HTTP bearer headers, controller request timeouts).
 - Web harness: `vite build` passes; headless-Chromium screenshots of both
   presets show the correct start position; tap e2→e4 in the browser reached
   the local Worker (ply 1, turn b); selection dots and last-move highlight
