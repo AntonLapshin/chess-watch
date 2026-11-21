@@ -74,6 +74,27 @@ The relay listens on `127.0.0.1:8787` only; `cloudflared` connects outbound,
 so no inbound port is open. Full walkthrough, Access policy, verification
 and troubleshooting: `scripts/cloudflare/README.md`.
 
+## Still offline on the watch? Read the Diagnostics screen
+
+On the watch: Menu → **Test link** (or the Test link button on the
+"Connecting…" screen). It runs a live probe through the side service and
+shows where the link breaks — no tokens are displayed. Report the lines
+verbatim; the table below is what they mean.
+
+| What the screen shows | Meaning | Fix |
+|---|---|---|
+| `Build:` older than `git rev-parse HEAD`, or `Names: Aurora / Sam` when `.env` says otherwise | The watch is running a stale install | `make preview` again from the current checkout and reinstall; check the Build line changes |
+| `Host: localhost…` / `127.0.0.1` | Stale build baked with a dev URL | Same as above — the watch cannot reach localhost |
+| `Poll err: 1` / `Diag: side unreachable` | The page never reached the side service (ZML BLE shake timed out after 5 s) | Keep the Zepp app open in the foreground, Bluetooth on, watch paired; reinstall via a fresh `make preview` (a pre-fix build crashes its side service on load) |
+| `Ping: FAIL` + `Last: state http_403` | Cloudflare Access rejected the service token | Recheck `CHESS_CF_ACCESS_CLIENT_ID`/`_SECRET` in `.env` and the Service Auth policy on the Access application, then rebuild |
+| `Ping: ok` + `Last: state unauthorized` | Player tokens differ between `.env` and `server/.env` | Copy the same tokens into both files (see `scripts/cloudflare/README.md` §0) and restart the server + rebuild |
+| `Ping: FAIL` + `Last: state timeout` / `network` | Phone has no route to the tunnel, or the tunnel/server is down | `curl` the health URL with the Access headers from a laptop (see `scripts/cloudflare/README.md` §3); check `make -C server status` and `scripts/cloudflare/setup-tunnel.sh --status` |
+| `Ping: ok` + `Last: state ok` but the board stays offline | The poll itself is failing after a good ping (BLE flakiness, stale revision) | Wait through a retry cycle; if it persists, the `Last` line after the next poll is the new evidence |
+
+The server and tunnel can be fine while the watch is offline — the CLI
+health check only proves the server side. The Diagnostics screen is the
+only evidence about the watch → phone → server path.
+
 ## Security note
 
 Tokens (player bearer tokens and the optional Cloudflare Access service
@@ -84,18 +105,17 @@ no public port to scan.
 
 ## Verification status (2026-11-21)
 
-Verified: server pytest 37/37, smoke script pass, JS vitest 19/19, `vite
-build` pass, headless-Chromium screenshots of both presets (correct start
-position, flipped Black board, selection dots, last-move highlight), and a
-browser tap e2→e4 reaching the server (ply 1, turn b).
+Verified: server pytest 37/37, smoke script pass, JS vitest 27/27, `vite
+build` pass, `zeus build` pass (0.1.1, all 4 targets), headless-Chromium
+screenshots of both presets (correct start position, flipped Black board,
+selection dots, last-move highlight), a browser tap e2→e4 reaching the
+server (ply 1, turn b), preset switching Bip 6 ↔ Active 3 in `make web`
+(board re-renders both ways — previously black after switching, see
+`docs/design.md` §7), and Menu → Test link opening the Diagnostics overlay
+on both presets, including with the server down (offline board + `Ping:
+FAIL` + `Last: state http_500`).
 
-Not yet verified on-device (see `docs/manual-test.md`): Zeus build was
-attempted 2026-11-21 (zeus-cli 1.10.2) and failed with `[ERROR] appId is
-invalid, please confirm it` — expected, since `app.json` has the
-placeholder `appId` 0; re-run after console registration, which will also
-confirm the `app-side` module key and zml imports. Also unconfirmed:
-`fetch` response shape on the side service, Vibrator availability, console
-icon acceptance, and `appId` registration. The round-board y (69, not the
-plan's 58) and round status bar are documented deviations in
-`docs/design.md` — the plan's numbers put board corners outside the round
-display.
+Not yet verified on-device (see `docs/manual-test.md`): the 0.1.1 build
+has not been installed on either watch yet. The first thing to check after
+installing it is Menu → Test link and the decision table above. Also
+unconfirmed: Vibrator availability, console icon acceptance.

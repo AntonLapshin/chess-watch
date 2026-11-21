@@ -34,9 +34,22 @@ tap a target → promotion picker if needed → send with a fresh idempotent
 Poll loop: `GET_STATE { since: revision, wait: 20 }`; on error the red dot
 shows and retry backs off 3 s → 10 s; `onHide` stops, `onShow` refreshes.
 The connecting screen shows the latest poll error code plus a "Test link"
-button: it asks the side service for DIAG (fetch call shape, live `/health`
-ping, last server-call outcome — no tokens), so an offline watch reports
-exactly where the link breaks instead of guessing.
+button. The result lives in a Diagnostics overlay (also reachable from
+Menu → Test link at any time, including while the offline board is showing),
+so a poll failure swapping in the offline board can no longer wipe it: it
+reports the installed build (commit + version from `gen-app-config`), the
+player names and host baked into that build, the side-service fetch shape,
+a live `/health` ping with its HTTP status, the last server-call outcome,
+and the latest poll error. While a test runs, new polls are deferred so
+the answer is not stuck behind a 20 s long-poll. Error codes are mapped in
+`shared/protocol.js`: ZML BLE codes 1 (shake timeout — the side service
+never answered, ~5 s of "Connecting…"), 2 (BLE disconnect), 4 (request
+timeout) mean the page never reached the side service, while `unauthorized`
+means the player tokens in `.env` differ from `server/.env`, and
+`http_403` / `http_200`-with-HTML mean the Cloudflare Access service token
+was rejected. A stale install is identifiable on that screen: names
+Aurora/Sam or a `Build` commit older than HEAD means rebuild + reinstall,
+not a server problem.
 First poll sends `since: -1` so it returns immediately (a fresh game has
 revision 0). A revision conflict triggers an immediate refresh, never a
 retry. Failed sends retry with the same client id (idempotent server-side).
@@ -105,6 +118,22 @@ checker + knight mark (`scripts/gen-icons.mjs`).
 6. **Config file location.** `server/.env.example` lives next to the
    server (the root `.env.example` covers the watch build); either file is
    read, `CHESS_ENV_FILE` overrides.
+7. **Web preset switch black screen.** Switching Bip 6 ↔ Active 3 in
+   `make web` rendered a black frame, while loading `?device=active-3`
+   directly worked. Root cause was not the round layout: the preset
+   switcher remounts `WatchPage` (keyed wrapper), and React runs the old
+   component's cleanup after the new one renders but before its effects —
+   the old cleanup nulled the module-level `_triggerRender`, so the new
+   mount's `build()` render (and every later poll render) was collected
+   but never delivered to React state. `WatchPage.jsx` now re-asserts
+   `_triggerRender` inside its effect (post-cleanup) and the cleanup only
+   clears it if it is still its own setter.
+8. **Build stamp.** `scripts/gen-app-config.mjs` writes
+   `build: { at, commit }` (git HEAD, or null outside a checkout) into the
+   generated config, so DIAG can prove which commit the installed bundle
+   came from. `dist/*.zab` is gitignored: a build artifact embeds the real
+   bearer + Access tokens and must never be committed (one was, in
+   `c6346a3`, and was removed again here; it stays in that commit's history).
 7. **Tokens in `app.json`.** `appId` is `0` with a TODO comment — it must
    be registered in console.zepp.com; no real appId is invented.
 
@@ -118,7 +147,13 @@ checker + knight mark (`scripts/gen-icons.mjs`).
    on-device (detected via `sideService`/`messaging` globals) and the
    standard `fetch(url, {...})` shape in browsers/Node; `parseBody` handles
    `res.body` as string or object plus the browser `.json()` path, and a
-   missing `res.status` is inferred from whether the body parsed.
+   missing `res.status` is inferred from whether the body parsed. The
+   2026-11-21 14:03 preview build's bundled `app-side.js` was inspected
+   and does contain the object-fetch shape, DIAG, and the tunnel hostname —
+   so a watch still showing the offline board with the default Aurora/Sam
+   names is running an older install or never reaches the side service
+   (see the Diagnostics decision table in the README); on-device fetch
+   behaviour is still unconfirmed until that screen is read.
 3. **`IMG` sizing** — avoided by generating 38/37 px assets per shape.
 4. **`FILL_RECT` radius/alpha** — verified in the runner source:
    `WidgetRenderer.jsx` passes `radius` to `borderRadius` and decodes the

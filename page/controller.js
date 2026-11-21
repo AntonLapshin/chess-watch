@@ -26,6 +26,7 @@ export class Controller {
     this._retryDelay = RETRY_BASE_MS;
     this._pollInFlight = false;
     this._sendQueue = []; // [{ kind, payload, clientId, attempts }]
+    this._diagInFlight = false;
   }
 
   start() {
@@ -55,6 +56,13 @@ export class Controller {
 
   async _poll() {
     if (!this.running || this._pollInFlight) return;
+    // A diagnostics run is in progress: do not start another long-poll
+    // behind it — the two requests would compete on the one BLE channel
+    // and the DIAG answer would sit behind a 20 s poll. Re-check shortly.
+    if (this._diagInFlight) {
+      this._schedulePoll(1000);
+      return;
+    }
     this._pollInFlight = true;
     this.attempts += 1;
     try {
@@ -103,13 +111,20 @@ export class Controller {
     this._poll();
   }
 
-  /** Side-service link diagnostic (no tokens cross the bridge). */
+  /** Side-service link diagnostic (no tokens cross the bridge).
+   *  While it runs, new polls are deferred (see _poll) so the answer is
+   *  not stuck behind a 20 s long-poll; a poll already in flight may still
+   *  finish first. Never throws: failures come back as { error }. */
   async runDiag() {
+    this._diagInFlight = true;
     try {
-      const res = await this.request({ method: "DIAG", params: {} });
+      const res = await this.request({ method: "DIAG", params: { role: this.role } });
       return res || { error: "unknown" };
     } catch (e) {
       return { error: (e && e.code) || "unknown", message: (e && e.message) || String(e) };
+    } finally {
+      this._diagInFlight = false;
+      this._schedulePoll(0);
     }
   }
 

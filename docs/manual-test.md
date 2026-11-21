@@ -19,6 +19,12 @@ Two watches (Bip 6 + Active 3 Premium) + the server on the LAN/VPN host.
 
 - [ ] First launch on each watch shows the player picker; the choice
       persists across restarts. Menu → Switch player returns to the picker.
+- [ ] Menu → Test link shows the Diagnostics overlay (build commit matches
+      `git rev-parse HEAD`, names/host match `.env`); with the server up it
+      reports `Ping: ok` and `Last: state ok`. Close returns to the board.
+- [ ] With the server stopped, the board still renders (offline dot) and
+      Menu → Test link still opens, reporting `Ping: FAIL` and the last
+      poll error — the diagnostics must not disappear with the board.
 - [ ] Start position renders correctly on both shapes; Black's board is
       flipped (black pieces at the bottom on the Active 3).
 - [ ] Tap a piece → legal-target dots only; tap a target → the move lands
@@ -53,19 +59,14 @@ Two watches (Bip 6 + Active 3 Premium) + the server on the LAN/VPN host.
 
 ## Open verification items (not yet done on-device)
 
-- Zeus build: attempted 2026-11-21 with @zeppos/zeus-cli 1.10.2. The CLI
-  ran (device list updated OK) and then failed with
-  `[ERROR] appId is invalid, please confirm it` — expected, because
-  `app.json` carries the placeholder `appId` 0, not a console-registered
-  id. Re-run `make build` after registering the app and setting the real
-  `appId`; that run will also confirm the `app-side` module key and the
-  zml imports (`BasePage`, `BaseSideService`, `BaseApp`).
+- 0.1.1 build install: `zeus build` passes (0.1.1, all targets) with the
+  registered `appId` 367819236781263. Install via `make preview` on both
+  watches and read Menu → Test link first (see the README decision table).
 - `fetch` response shape on the side service (`res.status` vs `res.body`
   only) — the client parses defensively, but on-device behaviour is
-  unconfirmed.
+  unconfirmed until the Diagnostics screen is read.
 - Vibrator availability on both models.
 - Console icon acceptance (192×192 PNGs provided).
-- `appId` registration (placeholder `0` in `app.json`).
 
 ## Already verified (browser + server, 2026-11-21)
 

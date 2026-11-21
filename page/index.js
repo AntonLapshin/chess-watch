@@ -9,7 +9,7 @@ import { renderBoard } from "./board.js";
 import { renderStatus } from "./status.js";
 import {
   renderPicker, renderMenu, renderConfirm, renderPromotion,
-  renderOffer, renderResult,
+  renderOffer, renderResult, renderDiag,
 } from "./overlays.js";
 import { Controller } from "./controller.js";
 import { loadRole, saveRole, clearRole, loadHapticsEnabled, saveHapticsEnabled } from "../utils/storage.js";
@@ -24,7 +24,7 @@ let _controller = null;
 let _state = null;
 let _connected = false;
 let _selected = null;      // UCI square or null
-let _overlay = null;       // null | 'menu' | 'confirm-resign' | 'confirm-restart' | 'promotion' | 'result'
+let _overlay = null;       // null | 'menu' | 'confirm-resign' | 'confirm-restart' | 'promotion' | 'result' | 'diag'
 let _pendingPromotion = null; // { from, to }
 let _pendingMove = false;
 let _toast = null;         // { text, until }
@@ -57,6 +57,61 @@ function showToast(text) {
     _toast = null;
     _page && _page.render();
   }, 2500);
+  _page && _page.render();
+}
+
+// Short lines for the Diagnostics overlay (<= ~32 chars each, so they fit
+// the round panel at 16 px). Raw codes stay visible: report them verbatim.
+function diagLines() {
+  const lines = [];
+  lines.push(`Role: ${_role} (${_role === "p1" ? "White" : "Black"})`);
+  if (_diag && !_diag.error) {
+    const b = _diag.build || {};
+    lines.push(`Build: ${b.commit || "?"}${_diag.version ? " v" + _diag.version : ""}`);
+    if (_diag.names) lines.push(`Names: ${_diag.names.p1} / ${_diag.names.p2}`);
+    lines.push(`Host: ${_diag.host || "?"}`);
+    lines.push(`Side: ${_diag.shape || "?"}`);
+    const ping = _diag.ping || {};
+    lines.push(`Ping: ${ping.ok ? "ok" : "FAIL" + (ping.status != null ? " " + ping.status : "")}`);
+    if (_diag.lastFetch) {
+      const lf = _diag.lastFetch;
+      lines.push(`Last: ${lf.where} ${lf.ok ? "ok" : lf.code || "fail"}${lf.status != null ? " " + lf.status : ""}`);
+    } else {
+      lines.push("Last: no server call yet");
+    }
+    lines.push(`Tokens: ${_diag.hasTokens ? "yes" : "NO"}  Access: ${_diag.access ? "yes" : "no"}`);
+  } else if (_diag && _diag.error) {
+    lines.push("Diag: side unreachable");
+    lines.push(`Err: ${_diag.error}`);
+    if (_diag.message) lines.push(String(_diag.message).slice(0, 32));
+  }
+  if (_netError) {
+    const short = { 1: "no link to phone", 2: "bluetooth lost", 4: "request timed out" }[_netError.code];
+    lines.push(`Poll err: ${_netError.code} (try ${_netAttempts})`);
+    lines.push(short || errorMessage(_netError.code, _netError.message).slice(0, 32));
+  } else {
+    lines.push("Poll err: none");
+  }
+  return lines;
+}
+
+// Open the Diagnostics overlay and run a live link test. The overlay is
+// opened BEFORE awaiting: the old Connecting-screen button only stored the
+// result in _diag, and the first poll failure swapped in the offline board
+// (deleting the button and its lines) while the test was still running —
+// so the result was never visible. As an overlay it survives re-renders,
+// and it is reachable from Menu at any time.
+async function runDiag() {
+  if (_diagBusy || !_controller) return;
+  _diagBusy = true;
+  _overlay = "diag";
+  _page && _page.render();
+  try {
+    _diag = await _controller.runDiag();
+  } catch (e) {
+    _diag = { error: (e && e.code) || "unknown", message: (e && e.message) || String(e) };
+  }
+  _diagBusy = false;
   _page && _page.render();
 }
 
@@ -109,7 +164,7 @@ async function doMove(from, to, promotion) {
   const res = await _controller.submitMove(from, to, promotion);
   _pendingMove = false;
   if (!res.ok) {
-    showToast(errorMessage(res.code));
+    showToast(errorMessage(res.code, res.message));
   }
   _page && _page.render();
 }
@@ -117,7 +172,7 @@ async function doMove(from, to, promotion) {
 async function doAction(type, claim) {
   if (!_controller) return;
   const res = await _controller.submitAction(type, claim);
-  if (!res.ok) showToast(errorMessage(res.code));
+  if (!res.ok) showToast(errorMessage(res.code, res.message));
   else if (type === "resign") showToast("You resigned");
   _overlay = null;
   _page && _page.render();
@@ -299,19 +354,7 @@ Page(
             y: _layout.menu.y - 48, w: tbw, h: 38,
             text: _diagBusy ? "Testing…" : "Test link", text_size: 18,
             radius: 10, normal_color: THEME.button, color: THEME.buttonText,
-            click_func: async () => {
-              if (_diagBusy || !_controller) return;
-              _diagBusy = true;
-              _diag = null;
-              this.render();
-              try {
-                _diag = await _controller.runDiag();
-              } catch (e) {
-                _diag = { error: (e && e.code) || "unknown" };
-              }
-              _diagBusy = false;
-              this.render();
-            },
+            click_func: () => { runDiag(); },
           }),
         );
       }
@@ -372,6 +415,7 @@ Page(
             saveHapticsEnabled(_hapticsOn);
             this.render();
           },
+          onTestLink: () => { runDiag(); },
           onSwitchPlayer: () => {
             stopController();
             clearRole();
@@ -420,6 +464,12 @@ Page(
             _overlay = null;
             this.render();
           },
+        });
+      } else if (_overlay === "diag") {
+        renderDiag(hmUI, _widgets, _layout, diagLines(), {
+          busy: _diagBusy,
+          onRetest: () => { runDiag(); },
+          onClose: () => { _overlay = null; this.render(); },
         });
       }
     },

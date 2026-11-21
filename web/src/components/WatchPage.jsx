@@ -52,9 +52,23 @@ export function WatchPage({ width, height }) {
 
   useEffect(() => {
     if (!_pageConfig) return;
+    // Re-assert the render trigger here, before build(): when the preset
+    // switcher remounts this component (the wrapper div is keyed by
+    // device), React runs the OLD component's cleanup AFTER the new one
+    // renders but BEFORE its effects run — so the old cleanup's
+    // `_triggerRender = null` wipes the new component's setter. Without
+    // this line the build's render (and every later poll render) is
+    // collected but never delivered to React state, and the frame stays
+    // black after switching presets — while loading ?device=active-3
+    // directly works fine, because no remount happens. Assigning in the
+    // effect (which runs after all cleanups) restores it.
+    _triggerRender = setWidgets;
     _pageConfig.build();
     return () => {
-      _triggerRender = null;
+      // Only clear the trigger if it is still ours: a newer mount may
+      // already have replaced it (see above), and nulling it would black
+      // out that mount the same way.
+      if (_triggerRender === setWidgets) _triggerRender = null;
       if (_pageConfig?.onDestroy) _pageConfig.onDestroy();
     };
   }, []);

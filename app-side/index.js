@@ -3,6 +3,7 @@
 // same HTTP adapter directly (see web/src/adapters/httpAdapter.js).
 import { BaseSideService } from "@zeppos/zml/base-side";
 import CONFIG from "../shared/config.generated.js";
+import { APP_VERSION } from "../shared/version.js";
 import { callServer, checkHealth, fetchShape, serverHost, toError } from "../shared/httpClient.js";
 
 let _lastGood = null;
@@ -39,7 +40,9 @@ async function trackedCall(where, role, path, opts) {
     where,
     ok: result.ok,
     status: result.status != null ? result.status : null,
-    code: result.code || null,
+    // HTTP answers carry no `code` field — derive one (http_403, ...)
+    // so DIAG shows the failure instead of a bare "fail".
+    code: result.ok ? null : (result.code || toError(result).code),
     at: Date.now(),
   };
   return result;
@@ -106,6 +109,9 @@ async function handleRequest(req) {
     // health probe through the same fetch path as the poll, so the screen
     // can show whether the side service reaches the relay at all. Contains
     // no tokens: host, shape, probe outcome, last poll outcome, names only.
+    // `build` identifies the installed bundle (commit + time): if it is
+    // older than the current HEAD, the watch is running a stale build and
+    // no server-side fix will help until it is reinstalled.
     const ping = await checkHealth(CONFIG);
     return {
       shape: fetchShape(),
@@ -116,6 +122,9 @@ async function handleRequest(req) {
       names: offlineNames(),
       hasTokens: Boolean(CONFIG.players.p1.token && CONFIG.players.p2.token),
       access: Boolean(CONFIG.access && CONFIG.access.clientId),
+      build: CONFIG.build || null,
+      version: APP_VERSION,
+      role: params.role || null,
     };
   }
   throw { code: "unknown", message: `unknown method ${method}` };

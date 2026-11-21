@@ -58,7 +58,7 @@ export function renderPicker(hmUI, widgets, layout, onPick) {
 
 export function renderMenu(hmUI, widgets, layout, opts) {
   backdrop(hmUI, widgets, layout, opts.onClose);
-  const p = panel(hmUI, widgets, layout, 340);
+  const p = panel(hmUI, widgets, layout, 384);
   const bw = p.w - 40;
   let y = p.y + 16;
   text(hmUI, widgets, p.x, y, p.w, 28, "Menu", 22);
@@ -69,12 +69,13 @@ export function renderMenu(hmUI, widgets, layout, opts) {
     ["Start over", opts.onRestart],
     ["Resign", opts.onResign, true],
     [opts.hapticsOn ? "Vibrate: on" : "Vibrate: off", opts.onToggleHaptics],
+    ["Test link", opts.onTestLink],
     ["Switch player", opts.onSwitchPlayer],
     ["Close", opts.onClose],
   ];
   for (const [label, fn, danger] of items) {
-    button(hmUI, widgets, p.x + 20, y, bw, 38, label, fn, danger);
-    y += 44;
+    button(hmUI, widgets, p.x + 20, y, bw, 36, label, fn, danger);
+    y += 40;
   }
 }
 
@@ -124,4 +125,23 @@ export function renderResult(hmUI, widgets, layout, state, role, opts) {
   text(hmUI, widgets, p.x + 10, p.y + 62, p.w - 20, 56, recent || "No moves played", 16, THEME.textSecondary);
   button(hmUI, widgets, p.x + 20, p.y + 128, p.w - 40, 48, "Play again", opts.onPlayAgain);
   button(hmUI, widgets, p.x + 20, p.y + 184 - 8, p.w - 40, 40, "Close", opts.onClose);
+}
+
+// Diagnostics overlay: the durable home of the "Test link" result. Unlike
+// the lines on the Connecting screen, this panel is an overlay, so a poll
+// failure swapping in the offline board cannot wipe it, and it is reachable
+// from Menu at any time — including while the board is showing. Lines are
+// kept short (<= ~32 chars) so they fit the round panel at 16 px.
+export function renderDiag(hmUI, widgets, layout, lines, opts) {
+  backdrop(hmUI, widgets, layout, opts.onClose);
+  const h = Math.min(layout.height - 24, 112 + lines.length * 24 + 52);
+  const p = panel(hmUI, widgets, layout, h);
+  text(hmUI, widgets, p.x, p.y + 14, p.w, 28, opts.busy ? "Testing…" : "Link test", 22);
+  lines.forEach((line, i) => {
+    text(hmUI, widgets, p.x + 12, p.y + 48 + i * 24, p.w - 24, 22, line, 16, THEME.textSecondary);
+  });
+  const by = p.y + h - 52;
+  const half = Math.floor((p.w - 60) / 2);
+  button(hmUI, widgets, p.x + 20, by, half, 40, "Test again", opts.onRetest);
+  button(hmUI, widgets, p.x + 40 + half, by, half, 40, "Close", opts.onClose);
 }

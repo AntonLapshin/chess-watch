@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { accessHeaders, checkHealth, callServer } from "./httpClient.js";
+import { accessHeaders, checkHealth, callServer, toError } from "./httpClient.js";
 
 const config = {
   serverUrl: "https://chess.example.com",
@@ -34,7 +34,7 @@ describe("checkHealth", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(checkHealth(config)).resolves.toEqual({ ok: true });
+    await expect(checkHealth(config)).resolves.toEqual({ ok: true, status: 200 });
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toBe("https://chess.example.com/api/v1/health");
     expect(opts.headers["CF-Access-Client-Id"]).toBe("access-id");
@@ -45,14 +45,14 @@ describe("checkHealth", () => {
       status: 200,
       body: "<!DOCTYPE html><title>Sign in</title>",
     })));
-    await expect(checkHealth(config)).resolves.toEqual({ ok: false });
+    await expect(checkHealth(config)).resolves.toEqual({ ok: false, status: 200 });
   });
 
   it("reports failure instead of throwing", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => {
       throw new Error("offline");
     }));
-    await expect(checkHealth(config)).resolves.toEqual({ ok: false });
+    await expect(checkHealth(config)).resolves.toEqual({ ok: false, status: null });
   });
 });
 
@@ -98,6 +98,16 @@ describe("callServer", () => {
     })));
     const result = await callServer(config, "p1", "/api/v1/state");
     expect(result).toMatchObject({ ok: false, code: "network" });
+  });
+
+  it("keeps an HTTP status as the error code when the body has none", () => {
+    // Cloudflare Access 403 / proxy 502 with an empty body used to
+    // collapse to "unknown", hiding the exact failure from DIAG.
+    expect(toError({ ok: false, status: 403, data: null })).toMatchObject({ code: "http_403" });
+    expect(toError({ ok: false, status: 502, data: null })).toMatchObject({ code: "http_502" });
+    // A JSON error body still wins over the status.
+    expect(toError({ ok: false, status: 401, data: { code: "unauthorized" } }))
+      .toMatchObject({ code: "unauthorized" });
   });
 
   it("uses the single-object fetch shape on the Zepp side service", async () => {

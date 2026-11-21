@@ -47,6 +47,9 @@ export function fetchShape() {
 
 function doFetch(url, { method = "GET", headers = {}, body, timeoutMs = 30000 }) {
   if (isZeppSideService()) {
+    // The docs list only url/method/headers/body, but the runtime accepts
+    // `timeout` too: ZML's own fetch wrapper (zml-side.js) calls this same
+    // global fetch as fetch({ timeout: 1e4, ...params }).
     return fetch({
       url,
       method: String(method).toUpperCase(),
@@ -88,9 +91,14 @@ export async function checkHealth(config) {
     const status = inferStatus(res, data);
     // Require the relay's JSON payload: a followed Cloudflare Access login
     // redirect is HTML with status 200 and must not count as healthy.
-    return { ok: status >= 200 && status < 300 && !!data && data.status === "ok" };
+    // The status is returned too: DIAG needs to tell a 403 (bad Access
+    // service token) from no answer at all.
+    return {
+      ok: status >= 200 && status < 300 && !!data && data.status === "ok",
+      status,
+    };
   } catch (_) {
-    return { ok: false };
+    return { ok: false, status: null };
   }
 }
 
@@ -169,11 +177,17 @@ export function serverHost(config) {
   }
 }
 
-/** Map a callServer result to the { code, message } shape the page uses. */
+/** Map a callServer result to the { code, message } shape the page uses.
+ *  An HTTP answer with no JSON error body (Cloudflare Access 403, a
+ *  proxy 502, ...) used to collapse to "unknown", hiding exactly the
+ *  distinction DIAG needs. Keep the status as `http_<status>` instead. */
 export function toError(result) {
   if (result && result.data && typeof result.data.code === "string") {
     return { code: result.data.code, message: result.data.message || result.data.code };
   }
   if (result && result.code) return { code: result.code, message: result.message || result.code };
+  if (result && typeof result.status === "number") {
+    return { code: `http_${result.status}`, message: `Server answered ${result.status}` };
+  }
   return { code: "unknown", message: "Something went wrong" };
 }

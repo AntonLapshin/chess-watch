@@ -10,5 +10,8 @@ node_modules/
 web/node_modules/
 .DS_Store
 web/dist/
+dist/
+# NOTE: dist/*.zab bundles embed the real bearer + Cloudflare Access
+# tokens from .env — never commit a build artifact.
 __pycache__/
 server/__pycache__/

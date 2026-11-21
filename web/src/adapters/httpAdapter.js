@@ -3,6 +3,7 @@
 // over HTTP — no BLE in the browser. Shares shared/httpClient.js with the
 // real side service so the request/response mapping is identical.
 import CONFIG from "../../../shared/config.generated.js";
+import { APP_VERSION } from "../../../shared/version.js";
 import { callServer, checkHealth, fetchShape, serverHost, toError } from "../../../shared/httpClient.js";
 
 // Browser requests go to the Vite dev server on the same origin; its /api
@@ -19,7 +20,9 @@ function track(where, result) {
     where,
     ok: result.ok,
     status: result.status != null ? result.status : null,
-    code: result.code || null,
+    // HTTP answers carry no `code` field — derive one (http_403, ...)
+    // so DIAG shows the failure instead of a bare "fail".
+    code: result.ok ? null : (result.code || toError(result).code),
     at: Date.now(),
   };
   return result;
@@ -94,6 +97,9 @@ export async function handleRequest(req) {
       names: { p1: CONFIG.players.p1.name, p2: CONFIG.players.p2.name },
       hasTokens: Boolean(CONFIG.players.p1.token && CONFIG.players.p2.token),
       access: false,
+      build: CONFIG.build || null,
+      version: APP_VERSION,
+      role: params.role || null,
     };
   }
   throw { code: "unknown", message: `unknown method ${method}` };

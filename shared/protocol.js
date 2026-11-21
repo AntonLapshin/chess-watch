@@ -26,9 +26,28 @@ export const ERROR_MESSAGES = {
   network: "No connection to server",
   timeout: "Server did not answer",
   unknown: "Something went wrong",
+  // ZML BLE-transport errors (zml-side.js MessageBuilder): the page never
+  // reached the side service at all, so no server error exists. Codes are
+  // numeric on the wire (1 = shake timeout, 2 = BLE disconnect, 4 =
+  // request timeout); the 5 s shake timeout is exactly the "~5 s of
+  // Connecting…" before the offline board appears.
+  1: "No link to phone — side service did not answer",
+  2: "Bluetooth disconnected",
+  4: "Request timed out",
 };
 
-export function errorMessage(code) {
+/** Human line for a poll/send error code (server, HTTP or ZML link). */
+export function errorMessage(code, message) {
+  if (code != null && code !== "unknown" && ERROR_MESSAGES[code] !== undefined) {
+    return ERROR_MESSAGES[code];
+  }
+  if (typeof code === "string" && /^http_\d+$/.test(code)) {
+    return `Server answered ${code.slice(5)}`;
+  }
+  const msg = String(message || "");
+  if (/shake timeout/i.test(msg)) return ERROR_MESSAGES[1];
+  if (/ble disconnect/i.test(msg)) return ERROR_MESSAGES[2];
+  if (/request id=.*timeout/i.test(msg)) return ERROR_MESSAGES[4];
   return ERROR_MESSAGES[code] || ERROR_MESSAGES.unknown;
 }
 
