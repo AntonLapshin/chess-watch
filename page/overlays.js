@@ -1,0 +1,127 @@
+// Overlays: first-run picker, menu, confirms, promotion, offer, result.
+// Every overlay is a full-screen dim + centred panel, built from the same
+// widgets as the board (FILL_RECT / TEXT / BUTTON).
+import { resultText } from "../shared/protocol.js";
+import { THEME } from "./theme.js";
+
+function backdrop(hmUI, widgets, layout, onClose) {
+  widgets.push(
+    hmUI.createWidget(hmUI.widget.FILL_RECT, {
+      x: 0, y: 0, w: layout.width, h: layout.height,
+      color: THEME.overlay,
+      click_func: onClose || undefined,
+    }),
+  );
+}
+
+function panel(hmUI, widgets, layout, h) {
+  const w = Math.min(layout.width - 40, 320);
+  const x = Math.floor((layout.width - w) / 2);
+  const y = Math.floor((layout.height - h) / 2);
+  widgets.push(
+    hmUI.createWidget(hmUI.widget.FILL_RECT, {
+      x, y, w, h, radius: 16, color: 0x1c2530,
+    }),
+  );
+  return { x, y, w, h };
+}
+
+function text(hmUI, widgets, x, y, w, h, str, size, color) {
+  widgets.push(
+    hmUI.createWidget(hmUI.widget.TEXT, {
+      x, y, w, h, text: str, text_size: size || 20,
+      color: color || THEME.text,
+      align_h: hmUI.align.CENTER_H, align_v: hmUI.align.CENTER_V,
+    }),
+  );
+}
+
+function button(hmUI, widgets, x, y, w, h, label, onClick, danger) {
+  widgets.push(
+    hmUI.createWidget(hmUI.widget.BUTTON, {
+      x, y, w, h, text: label, text_size: 20, radius: 10,
+      normal_color: danger ? THEME.danger : THEME.button,
+      color: THEME.buttonText,
+      click_func: onClick,
+    }),
+  );
+}
+
+export function renderPicker(hmUI, widgets, layout, onPick) {
+  backdrop(hmUI, widgets, layout);
+  const p = panel(hmUI, widgets, layout, 220);
+  text(hmUI, widgets, p.x, p.y + 16, p.w, 30, "Chess Watch", 26);
+  text(hmUI, widgets, p.x, p.y + 52, p.w, 24, "Which player are you?", 18, THEME.textSecondary);
+  button(hmUI, widgets, p.x + 20, p.y + 92, p.w - 40, 48, "Player 1 — White", () => onPick("p1"));
+  button(hmUI, widgets, p.x + 20, p.y + 152, p.w - 40, 48, "Player 2 — Black", () => onPick("p2"));
+}
+
+export function renderMenu(hmUI, widgets, layout, opts) {
+  backdrop(hmUI, widgets, layout, opts.onClose);
+  const p = panel(hmUI, widgets, layout, 340);
+  const bw = p.w - 40;
+  let y = p.y + 16;
+  text(hmUI, widgets, p.x, y, p.w, 28, "Menu", 22);
+  y += 44;
+  const items = [
+    ["Offer draw", opts.onOfferDraw],
+    ["Take back a move", opts.onTakeback],
+    ["Start over", opts.onRestart],
+    ["Resign", opts.onResign, true],
+    [opts.hapticsOn ? "Vibrate: on" : "Vibrate: off", opts.onToggleHaptics],
+    ["Switch player", opts.onSwitchPlayer],
+    ["Close", opts.onClose],
+  ];
+  for (const [label, fn, danger] of items) {
+    button(hmUI, widgets, p.x + 20, y, bw, 38, label, fn, danger);
+    y += 44;
+  }
+}
+
+export function renderConfirm(hmUI, widgets, layout, opts) {
+  backdrop(hmUI, widgets, layout, opts.onNo);
+  const p = panel(hmUI, widgets, layout, 190);
+  text(hmUI, widgets, p.x + 10, p.y + 18, p.w - 20, 30, opts.title, 22);
+  text(hmUI, widgets, p.x + 10, p.y + 54, p.w - 20, 48, opts.text, 18, THEME.textSecondary);
+  button(hmUI, widgets, p.x + 20, p.y + 118, Math.floor((p.w - 60) / 2), 48, "Yes", opts.onYes, opts.danger);
+  button(hmUI, widgets, p.x + 40 + Math.floor((p.w - 60) / 2), p.y + 118, Math.floor((p.w - 60) / 2), 48, "No", opts.onNo);
+}
+
+export function renderPromotion(hmUI, widgets, layout, onPick, onCancel) {
+  backdrop(hmUI, widgets, layout, onCancel);
+  const p = panel(hmUI, widgets, layout, 180);
+  text(hmUI, widgets, p.x, p.y + 16, p.w, 30, "Promote to", 22);
+  const labels = ["Queen", "Rook", "Bishop", "Knight"];
+  const pieces = ["q", "r", "b", "n"];
+  const bw = Math.floor((p.w - 40 - 3 * 10) / 4);
+  pieces.forEach((piece, i) => {
+    button(
+      hmUI, widgets,
+      p.x + 20 + i * (bw + 10), p.y + 66, bw, 56,
+      labels[i].slice(0, 1), () => onPick(piece),
+    );
+  });
+  text(hmUI, widgets, p.x, p.y + 132, p.w, 28, "Q  R  B  N", 18, THEME.textSecondary);
+}
+
+export function renderOffer(hmUI, widgets, layout, offer, state, opts) {
+  backdrop(hmUI, widgets, layout);
+  const p = panel(hmUI, widgets, layout, 220);
+  const names = { offer_restart: "Start over", offer_takeback: "Take back", offer_draw: "Draw" };
+  const title = `${state.opponent.name} offers: ${names[offer.type] || offer.type}`;
+  const remaining = Math.max(0, Math.round(offer.expires_at - state.server_time));
+  text(hmUI, widgets, p.x + 10, p.y + 16, p.w - 20, 56, title, 20);
+  text(hmUI, widgets, p.x, p.y + 76, p.w, 28, `Expires in ${remaining}s`, 18, THEME.textSecondary);
+  button(hmUI, widgets, p.x + 20, p.y + 118, Math.floor((p.w - 60) / 2), 48, "Accept", opts.onAccept);
+  button(hmUI, widgets, p.x + 40 + Math.floor((p.w - 60) / 2), p.y + 118, Math.floor((p.w - 60) / 2), 48, "Decline", opts.onDecline, true);
+}
+
+export function renderResult(hmUI, widgets, layout, state, role, opts) {
+  backdrop(hmUI, widgets, layout);
+  const p = panel(hmUI, widgets, layout, 230);
+  text(hmUI, widgets, p.x + 10, p.y + 18, p.w - 20, 34, resultText(state, role), 22);
+  const recent = (state.game.recent_moves || []).map((m) => m.san).join(" ");
+  text(hmUI, widgets, p.x + 10, p.y + 62, p.w - 20, 56, recent || "No moves played", 16, THEME.textSecondary);
+  button(hmUI, widgets, p.x + 20, p.y + 128, p.w - 40, 48, "Play again", opts.onPlayAgain);
+  button(hmUI, widgets, p.x + 20, p.y + 184 - 8, p.w - 40, 40, "Close", opts.onClose);
+}

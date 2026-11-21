@@ -1,0 +1,14 @@
+# Generated / secrets / local state
+shared/config.generated.js
+.env
+server/.env
+server/.venv/
+server/.run/
+server/tests/.test-default.sqlite3
+data/
+node_modules/
+web/node_modules/
+.DS_Store
+web/dist/
+__pycache__/
+server/__pycache__/

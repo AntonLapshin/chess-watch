@@ -1,0 +1,26 @@
+{
+  "name": "chess-watch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "config": "node scripts/gen-app-config.mjs",
+    "pieces": "node scripts/gen-pieces.mjs",
+    "icons": "node scripts/gen-icons.mjs",
+    "test": "vitest run --config vitest.config.mjs",
+    "test:watch": "vitest --config vitest.config.mjs",
+    "web": "npm run dev --prefix web",
+    "build": "npm run config && npx @zeppos/zeus-cli build",
+    "preview": "npm run config && npx @zeppos/zeus-cli preview"
+  },
+  "dependencies": {
+    "@zeppos/zml": "^0.0.43"
+  },
+  "devDependencies": {
+    "@zeppos/device-types": "^4.0.0",
+    "@zeppos/zeus-cli": "^1.10.0",
+    "dotenv": "^17.0.0",
+    "sharp": "^0.34.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "configVersion": "v3",
+  "app": {
+    "appId": 0,
+    "appName": "Chess Watch",
+    "appType": "app",
+    "version": {
+      "code": 1,
+      "name": "0.1.0"
+    },
+    "icon": "icon.png",
+    "vender": "chess-watch",
+    "description": "Two-player chess between two Amazfit watches, relayed by a self-hosted server."
+  },
+  "permissions": [
+    "data:os.device.info",
+    "device:os.local_storage"
+  ],
+  "runtime": {
+    "apiVersion": {
+      "compatible": "4.0",
+      "target": "4.0",
+      "minVersion": "4.0"
+    }
+  },
+  "targets": {
+    "default": {
+      "module": {
+        "page": {
+          "pages": ["page/index"]
+        },
+        "app-side": {
+          "path": "app-side/index"
+        }
+      },
+      "platforms": [
+        { "st": "s", "dw": 390 },
+        { "st": "r", "dw": 466 }
+      ]
+    }
+  },
+  "i18n": {
+    "en-US": {
+      "appName": "Chess Watch"
+    }
+  },
+  "defaultLanguage": "en-US"
+}
