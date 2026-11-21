@@ -110,9 +110,16 @@ TUNNEL_ID="$(cloudflared tunnel list 2>/dev/null |
   awk -v t="$TUNNEL" '$2 == t { print $1; exit }')"
 [[ -n "$TUNNEL_ID" ]] || die "could not find the tunnel ID for ${TUNNEL}"
 
-route_out="$(cloudflared tunnel route dns "$TUNNEL" "$TUNNEL_HOST" 2>&1)" || true
+route_out="$(cloudflared tunnel route dns --overwrite-dns "$TUNNEL_ID" "$TUNNEL_HOST" 2>&1)" || true
+# NOTE: pass the tunnel UUID, not the name. Name-based routing once claimed
+# "already configured to route to your tunnel" while the hostname actually
+# kept pointing at a different tunnel (brother-browser's catch-all 404).
+# --overwrite-dns matters for the same reason: without it, a hostname
+# already claimed by another tunnel silently keeps going there.
 if grep -qiE 'already|success|added|updated' <<<"$route_out"; then
-  log "(DNS routed: ${TUNNEL_HOST})"
+  log "(DNS routed: ${TUNNEL_HOST} -> ${TUNNEL_ID})"
+  log "(verify: dashboard DNS row for ${TUNNEL_HOST} must show tunnel ${TUNNEL},"
+  log " and 'sudo cloudflared tunnel list' must show ${TUNNEL_ID} next to ${TUNNEL})"
 else
   printf '%s\n' "$route_out" >&2
   die "DNS routing failed. Is ${TUNNEL_HOST} in this Cloudflare zone and the zone Active?"

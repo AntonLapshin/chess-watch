@@ -192,6 +192,7 @@ server, rebuild both watches.
 | `401` from the relay | Bearer token mismatch between root `.env` and `server/.env` |
 | `cloudflared tunnel list` says "cannot determine origin certificate" | Run it with `sudo` (the cert is in `/root/.cloudflared`) |
 | DNS name does not resolve | Zone not Active, or the CNAME was not created; re-run the setup script |
+| `404` from Cloudflare (empty body, only on the edge) | Hostname is DNS-routed to the *wrong* tunnel (e.g. the brother-browser one): the `tunnel route dns` CLI can claim "already configured" while the dashboard DNS row still shows the other tunnel. Compare IDs with `sudo cloudflared tunnel list`, re-route with the explicit UUID (`cloudflared tunnel route dns --overwrite-dns <tunnel-uuid> <hostname>`), or delete the stale CNAME in the dashboard and re-run the setup script. Confirm per-tunnel: `cloudflared_tunnel_total_requests` on each tunnel's metrics port (`127.0.0.1:2024x/metrics`) increments on the tunnel that answered |
 | Works on Wi-Fi, not cellular | Watch build still has the LAN URL; set `CHESS_SERVER_URL` to the HTTPS hostname and rebuild |
 
 Do not enable Cloudflare "Under Attack" mode for this hostname: it can
