@@ -79,7 +79,7 @@ function diagLines() {
     } else {
       lines.push("Last: no server call yet");
     }
-    lines.push(`Tokens: ${_diag.hasTokens ? "yes" : "NO"}  Access: ${_diag.access ? "yes" : "no"}`);
+    lines.push(`Tokens: ${_diag.hasTokens ? "yes" : "NO"}`);
   } else if (_diag && _diag.error) {
     lines.push("Diag: side unreachable");
     lines.push(`Err: ${_diag.error}`);

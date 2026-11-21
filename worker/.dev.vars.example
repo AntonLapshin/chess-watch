@@ -1,0 +1,9 @@
+# Copy to worker/.dev.vars for local `wrangler dev` (gitignored — never
+# commit real tokens). Generate with:
+#   python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+# The SAME tokens go in the repo-root .env (watch build) and in
+# `wrangler secret put CHESS_TOKEN_P1 / CHESS_TOKEN_P2` for deploys.
+CHESS_TOKEN_P1=CHANGEME-p1-token-at-least-24-chars-long-00000001
+CHESS_TOKEN_P2=CHANGEME-p2-token-at-least-24-chars-long-00000002
+CHESS_P1_NAME=Aurora
+CHESS_P2_NAME=Sam

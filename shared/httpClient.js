@@ -1,23 +1,10 @@
-// Cloudflare Access service-token headers, when configured. The tunnel's
-// Access application uses a Service Auth policy so only requests carrying
-// these headers reach the relay. Omitted for localhost/LAN setups.
-export function accessHeaders(config) {
-  const access = config && config.access;
-  if (!access || !access.clientId || !access.clientSecret) return {};
-  return {
-    "CF-Access-Client-Id": access.clientId,
-    "CF-Access-Client-Secret": access.clientSecret,
-  };
-}
-
 // The Zepp side-service `fetch` does NOT use the browser signature
 // `fetch(url, { method, headers, body, signal })`. Per the Zepp OS docs it
 // takes a single object — `fetch({ url, method, headers, body, timeout })` —
 // and only those five fields. A standard two-argument call silently drops
 // the second argument on-device: the request goes out as an unauthenticated
-// GET with no bearer or Cloudflare Access headers, so every call fails
-// (Cloudflare 302 / relay 401) and the page falls back to its offline
-// board. Detect the side service and use its call shape there; browsers,
+// GET with no bearer headers, so every call fails (relay 401) and the page
+// falls back to its offline board. Detect the side service and use its call shape there; browsers,
 // Node and the web harness keep the standard shape.
 function isZeppSideService() {
   // Bare-identifier typeof checks are safe even when the globals do not
@@ -84,15 +71,14 @@ function inferStatus(res, data) {
 export async function checkHealth(config) {
   try {
     const res = await doFetch(`${config.serverUrl}/api/v1/health`, {
-      headers: { ...accessHeaders(config), Accept: "application/json" },
+      headers: { Accept: "application/json" },
       timeoutMs: 15000,
     });
     const data = await parseBody(res);
     const status = inferStatus(res, data);
-    // Require the relay's JSON payload: a followed Cloudflare Access login
-    // redirect is HTML with status 200 and must not count as healthy.
-    // The status is returned too: DIAG needs to tell a 403 (bad Access
-    // service token) from no answer at all.
+    // Require the Worker's JSON payload: an HTML error page with status
+    // 200 must not count as healthy. The status is returned too: DIAG
+    // needs to tell a 403 from no answer at all.
     return {
       ok: status >= 200 && status < 300 && !!data && data.status === "ok",
       status,
@@ -120,7 +106,6 @@ export async function callServer(config, role, path, opts = {}) {
     const res = await doFetch(url, {
       method: opts.method || "GET",
       headers: {
-        ...accessHeaders(config),
         Accept: "application/json",
         Authorization: `Bearer ${player.token}`,
         "Content-Type": "application/json",
@@ -132,7 +117,7 @@ export async function callServer(config, role, path, opts = {}) {
     const status = inferStatus(res, data);
     const ok = status >= 200 && status < 300;
     if (ok && data === null) {
-      // Most likely a followed Cloudflare Access login page (HTML, 200).
+      // Most likely an HTML error page (200).
       return { ok: false, code: "network", message: "Unexpected response from server" };
     }
     return { ok, status, data };
@@ -178,9 +163,9 @@ export function serverHost(config) {
 }
 
 /** Map a callServer result to the { code, message } shape the page uses.
- *  An HTTP answer with no JSON error body (Cloudflare Access 403, a
- *  proxy 502, ...) used to collapse to "unknown", hiding exactly the
- *  distinction DIAG needs. Keep the status as `http_<status>` instead. */
+ *  An HTTP answer with no JSON error body (a proxy 403/502, ...) used to
+ *  collapse to "unknown", hiding exactly the distinction DIAG needs. Keep
+ *  the status as `http_<status>` instead. */
 export function toError(result) {
   if (result && result.data && typeof result.data.code === "string") {
     return { code: result.data.code, message: result.data.message || result.data.code };

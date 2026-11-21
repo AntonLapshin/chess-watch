@@ -3,13 +3,19 @@
 ## Architecture
 
 ```
-Bip 6 / Active 3 ──BLE──> Zepp app (side service) ──HTTP──> FastAPI server
-                            (page/index.js renders only)     (single source
+Bip 6 / Active 3 ──BLE──> Zepp app (side service) ──HTTP──> Cloudflare Worker
+                            (page/index.js renders only)     ──stub──> ChessGame
+                                                              Durable Object
+                                                              (single source
                                                               of truth)
 ```
 
-- **Server** (Python/FastAPI + python-chess + SQLite): enforces every rule,
-  stores the game, wakes both watches via long-poll. One uvicorn worker.
+- **Worker + Durable Object** (`worker/`): the Worker entry
+  (`src/index.js`) checks the config, authenticates the Bearer token,
+  and routes to the one `ChessGame` DO (`src/game-do.js`), which enforces
+  every rule, stores the game in DO SQLite, and wakes both watches via
+  long-poll. Rules live in `src/rules.js` (chess.js 1.4.0 + a persisted
+  repetition map — see "Worker internals").
 - **Watch page**: renders `legal_moves` from the server, sends tap-to-move.
   No chess engine on the watch — two engines could disagree on repetition,
   50-move counters, castling rights, and en passant. The watch only parses
@@ -19,8 +25,8 @@ Bip 6 / Active 3 ──BLE──> Zepp app (side service) ──HTTP──> Fast
 - **Web harness** (`web/`): Vite + React + zepp-web-runner runs the same
   `page/index.js` in the browser. A local `BasePage` shim calls the same
   HTTP adapter directly (no BLE). Requests use `/api` on the Vite origin;
-  Vite proxies them to `CHESS_SERVER_URL` and adds the Cloudflare Access
-  service-token headers, avoiding CORS/preflight on the tunnel hostname.
+  Vite proxies them to `CHESS_SERVER_URL` — the local Worker dev server
+  by default (`make web` sets it to `http://localhost:8787`).
 
 ## State machine (page)
 
@@ -45,9 +51,9 @@ the answer is not stuck behind a 20 s long-poll. Error codes are mapped in
 `shared/protocol.js`: ZML BLE codes 1 (shake timeout — the side service
 never answered, ~5 s of "Connecting…"), 2 (BLE disconnect), 4 (request
 timeout) mean the page never reached the side service, while `unauthorized`
-means the player tokens in `.env` differ from `server/.env`, and
-`http_403` / `http_200`-with-HTML mean the Cloudflare Access service token
-was rejected. A stale install is identifiable on that screen: names
+means the player tokens in `.env` differ from the Worker secrets, and
+`http_403` / `http_200`-with-HTML mean an edge/proxy error page, not a
+game error. A stale install is identifiable on that screen: names
 Aurora/Sam or a `Build` commit older than HEAD means rebuild + reinstall,
 not a server problem.
 First poll sends `since: -1` so it returns immediately (a fresh game has
@@ -61,16 +67,42 @@ ignores it, so browser and watch would disagree). Bip 6: board 336 px at
 (27, 46), cell 42, piece 38. Active 3: board 328 px at (69, 69), cell 41,
 piece 37. Status bar and 160×40 Menu button per `page/layout.js`.
 
-## Server internals
+## Worker internals
 
 - One game row (`games.id = 1`), `moves` and `actions` tables with `UNIQUE`
-  client ids for idempotency, `meta` for schema version. WAL mode.
-- The board is rebuilt per request by replaying moves through python-chess
-  (a few hundred plies at most) and cached implicitly by the stored FEN.
+  client ids for idempotency, `meta` for schema version — same table and
+  column names as the old `server/db.py`, plus `games.positions_json`
+  (the persisted repetition map, see below). DO SQLite via
+  `ctx.storage.sql.exec()` — note there is no `.query()` in workerd's
+  `SqlStorage`; `exec()` serves SELECTs too. The migration must declare
+  `new_sqlite_classes`, not `new_classes`, or `ctx.storage.sql` throws
+  ("SQL is not enabled for this Durable Object class").
+- The live `Chess` instance is cached on the DO object between requests;
+  on cold start it loads from the stored FEN (cheap) and the counts map
+  is read from storage — never a full replay per request. Measured:
+  a 200-ply replay + legal moves costs ~22–38 ms (measured in workerd and Node respectively), over the Workers Free
+  10 ms CPU/invocation cap; a FEN load is ~1 ms. Replay is used only for
+  takeback (truncated history) and restart.
+- Repetition comes from the persisted map (trimmed FEN — first 4 fields —
+  → count): chess.js 1.4.0 has no `isFivefoldRepetition` /
+  `isSeventyFiveMoveRule`, and after `load(fen)` its history is empty so
+  even `isThreefoldRepetition()` returns false. Threefold (>= 3) and
+  fivefold (>= 5) derive from the map; 50-move (>= 100) and 75-move
+  (>= 150) from the FEN half-move clock. The map is updated on every move
+  and recomputed on takeback/restart.
 - Offer expiry is lazy on read (expired offer → cleared, `revision++`,
-  waiters woken). The long-poll wait slices its sleep at the offer's
-  expiry time so a backgrounded expiry still wakes clients promptly.
-- Presence: last-seen per role on state calls; online within 45 s.
+  waiters woken) AND via `setAlarm()` on offer creation, so an expired
+  offer clears even with no traffic. Long-poll waiters are a per-DO list
+  of resolvers + `setTimeout` (never `blockConcurrencyWhile`: 30 s
+  timeout + it blocks the DO). A pending long-poll keeps the DO
+  non-hibernatable, so it bills duration while a watch page is open:
+  24 h of polling ≈ 10,800 GB-s of the 13,000 GB-s/day free tier.
+- Presence: last-seen per role on state calls (in-memory); online within 45 s.
+- Config: tokens are Worker secrets (`CHESS_TOKEN_P1` / `CHESS_TOKEN_P2`,
+  `.dev.vars` for local dev). Missing, equal, < 24-char, or `CHANGEME`
+  tokens fail every `/api/v1/*` request with 500 `config_error` — there
+  is no deploy-time startup to refuse in, so the failure surfaces on
+  first request instead.
 
 ## Pieces
 
@@ -102,10 +134,11 @@ checker + knight mark (`scripts/gen-icons.mjs`).
    with no moves" or "offerer answering their own offer"; the server uses
    `takeback_unavailable` and `not_recipient` (409), documented in
    `docs/protocol.md`.
-4. **`uv` not required.** `uv` is not installed in this environment, so
-   the server venv is created with `python3 -m venv` + `pip install -r
-   requirements.txt`; `pyproject.toml` keeps the same deps for `uv sync`
-   users. `server/Makefile` uses the venv's uvicorn.
+4. **`uv` not required (historical).** When the backend was a Python
+   server, `uv` was not installed in this environment, so the venv was
+   created with `python3 -m venv` + `pip`. The Python server is gone
+   (0.2.0, Worker + Durable Object); this note is kept for the history
+   of the old `server/` tree.
 5. **Web harness: local `WatchPage` copy.** The runner's `WatchPage`
    imports `_reset`/`_collect` from `zepp-web-runner/shims/hmUI`, while
    the page imports `@zos/ui` (plugin-resolved to the same file). Vite
@@ -115,9 +148,10 @@ checker + knight mark (`scripts/gen-icons.mjs`).
    runner's component that imports `_reset`/`_collect` from `@zos/ui`,
    guaranteeing one instance. `optimizeDeps.exclude` also keeps the shims
    out of the pre-bundle.
-6. **Config file location.** `server/.env.example` lives next to the
-   server (the root `.env.example` covers the watch build); either file is
-   read, `CHESS_ENV_FILE` overrides.
+6. **Config file location (historical).** The old Python server read
+   `server/.env` (or the root `.env`); `CHESS_ENV_FILE` overrode. The
+   Worker reads secrets (`wrangler secret put`) or `worker/.dev.vars`
+   instead; the root `.env.example` covers the watch build only.
 7. **Web preset switch black screen.** Switching Bip 6 ↔ Active 3 in
    `make web` rendered a black frame, while loading `?device=active-3`
    directly worked. Root cause was not the round layout: the preset
@@ -132,7 +166,7 @@ checker + knight mark (`scripts/gen-icons.mjs`).
    `build: { at, commit }` (git HEAD, or null outside a checkout) into the
    generated config, so DIAG can prove which commit the installed bundle
    came from. `dist/*.zab` is gitignored: a build artifact embeds the real
-   bearer + Access tokens and must never be committed (one was, in
+   bearer tokens and must never be committed (one was, in
    `c6346a3`, and was removed again here; it stays in that commit's history).
 9. **Side-service link verified against the official sample, not just
    the docs.** The 0.1.1 build on a real Active 3 reported `Diag: side
@@ -161,6 +195,33 @@ checker + knight mark (`scripts/gen-icons.mjs`).
    bridge is not answering. `app.json` `targets` uses the key `default`
    where the sample uses `common`; the built `.zab` flattens the module
    mapping, so the key does not reach the device and was left as-is.
+10. **Worker + Durable Object backend (0.2.0).** The FastAPI laptop
+    server + Cloudflare Tunnel + Access setup was replaced by
+    `worker/` (Worker entry + `ChessGame` DO + chess.js). The API is
+    unchanged, so no watch-side protocol change was needed. Port notes:
+    the DO loads the board from the stored FEN and keeps a live `Chess`
+    instance cached (never a full replay per request — 200 plies cost
+    ~22–38 ms vs the Free 10 ms CPU cap); repetition comes from a persisted
+    position-count map because chess.js 1.4.0 has no fivefold/75-move
+    APIs and `isThreefoldRepetition()` is false after `load(fen)`;
+    offer expiry is lazy on read AND via `setAlarm()`; long-poll waiters
+    are a resolver list, never `blockConcurrencyWhile`. Two workerd
+    gotchas found by the integration test: the migration must declare
+    `new_sqlite_classes` (not `new_classes`) or `ctx.storage.sql`
+    throws, and `SqlStorage` has no `.query()` — `exec()` serves
+    SELECTs too. Test tooling notes: `@cloudflare/vitest-pool-workers`
+    was renamed to `@cloudflare/vitest-plugin` (0.23.0 is deprecated);
+    that plugin needs vitest 4, while the repo root pins vitest 2, so
+    `worker/` is a separate package with its own vitest 4 install and
+    `worker/.npmrc` sets `legacy-peer-deps=true` (npm 10.9's arborist
+    crashes resolving the vitest 4 peer tree otherwise); the plugin
+    ignores `miniflare.vars` from the vitest config, so the integration
+    run uses a separate `wrangler.test.toml` with fake tokens; and the
+    pool shares DO storage across tests in one file (per-file, not
+    per-test isolation), so `tests/integration.test.mjs` is ordered to
+    build on a single game. One carried-over quirk: `recent_moves[].ply`
+    is numbered within the last-6 window (1..6), exactly as the old
+    server computed it — clients only display `san`.
 
 ## Verification items (plan §10) — status
 
@@ -174,7 +235,7 @@ checker + knight mark (`scripts/gen-icons.mjs`).
    `res.body` as string or object plus the browser `.json()` path, and a
    missing `res.status` is inferred from whether the body parsed. The
    2026-11-21 14:03 preview build's bundled `app-side.js` was inspected
-   and does contain the object-fetch shape, DIAG, and the tunnel hostname —
+   and does contain the object-fetch shape, DIAG, and the Worker hostname —
    so a watch still showing the offline board with the default Aurora/Sam
    names is running an older install or never reaches the side service
    (see the Diagnostics decision table in the README); on-device fetch
@@ -192,4 +253,4 @@ checker + knight mark (`scripts/gen-icons.mjs`).
    names `icon.png`. Console acceptance unverified.
 7. **Vibrator API** — `utils/haptics.js` wraps `new Vibrator()` in
    try/catch with a no-op fallback; availability unverified on-device.
-8. **`appId`** — placeholder `0`; must be registered before preview.
+8. **`appId`** — registered `1137599` in `app.json`.

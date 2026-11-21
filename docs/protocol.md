@@ -1,8 +1,13 @@
 # Chess Watch protocol
 
 Wire protocol between the watches (via the side service) and the relay
-server. Base URL: `{CHESS_SERVER_URL}`. All endpoints require
+Worker. Base URL: `{CHESS_SERVER_URL}`. All endpoints require
 `Authorization: Bearer <token>` except `/health`.
+
+Backend: a Cloudflare Worker (`worker/src/index.js`) routing to a
+`ChessGame` Durable Object (`worker/src/game-do.js`) with SQLite storage.
+The API below is unchanged from the old FastAPI server it replaced — the
+watch app, side service, and web harness needed no protocol changes.
 
 ## Auth
 
@@ -14,7 +19,10 @@ login step. A bad or missing token gets `401 {"code": "unauthorized"}`.
 
 ### `GET /api/v1/health`
 
-Liveness, no auth. Returns `{"status": "ok", "version": "0.1.0"}`.
+Liveness, no auth. Returns `{"status": "ok", "version": "0.2.0"}`. If the
+Worker secrets are missing, equal, shorter than 24 chars, or still the
+placeholders, every `/api/v1/*` request (including health) fails with
+`500 {"code": "config_error"}` instead.
 
 ### `GET /api/v1/state?since=&wait=&presence=1`
 
@@ -72,7 +80,7 @@ State payload (kept under ~1 KB for BLE):
 
 Validation order: auth → parse → idempotency (`client_move_id`) → revision
 match → game active → your turn → promotion required/valid → legality
-(python-chess) → apply → terminal/claimable detection → `revision++` →
+(chess.js) → apply → terminal/claimable detection → `revision++` →
 notify long-poll waiters.
 
 A duplicate `client_move_id` returns the current state with
@@ -96,8 +104,9 @@ A duplicate `client_move_id` returns the current state with
 | `claim_draw` | `claim: "threefold" \| "fifty"`, only if in `claimable` and it is your turn. |
 
 One pending offer per game. Offers expire after `CHESS_OFFER_TTL` (120 s);
-expiry is applied lazily on read: an expired offer is cleared, `revision++`,
-and long-poll waiters wake (with `last_action.type == "offer_expired"`).
+expiry is applied lazily on read AND by a Durable Object alarm set when
+the offer is created: an expired offer is cleared, `revision++`, and
+long-poll waiters wake (with `last_action.type == "offer_expired"`).
 
 ## Terminal detection (after each move)
 
@@ -124,12 +133,16 @@ the current `state` so the client can refresh instead of retrying.
 | 409 | `invalid_claim` | Draw cannot be claimed now |
 | 409 | `takeback_unavailable` | No move exists to take back |
 | 409 | `not_recipient` | Only the opponent may answer an offer |
-| 422 | `illegal_move` | python-chess rejects the move |
+| 422 | `illegal_move` | chess.js rejects the move |
 | 422 | `promotion_required` | A promotion move needs `q`/`r`/`b`/`n` |
+| 500 | `config_error` | Worker secrets missing / equal / too short / placeholder |
 
 ## Long-poll mechanics
 
-`wait` is clamped to 0–25 s. The server holds waiters on an in-process
-`asyncio.Condition` + version counter (see `server/notifier.py`): a commit
-between the state read and the wait bumps the version first, so there is no
-lost-wakeup window. **This requires exactly one uvicorn worker.**
+`wait` is clamped to 0–25 s. The Durable Object holds waiters on a
+per-DO list of resolvers + `setTimeout` (see `worker/src/game-do.js`): a
+commit between the state read and the wait resolves the waiter first, so
+there is no lost-wakeup window. `blockConcurrencyWhile` is deliberately
+not used for the wait (30 s timeout + it blocks the DO). A pending
+long-poll keeps the DO non-hibernatable, so it bills duration while a
+watch page is open — see `worker/README.md` for the free-tier numbers.

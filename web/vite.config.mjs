@@ -11,18 +11,11 @@ const generatedConfigPath = path.resolve(root, "shared", "config.generated.js");
 
 export default defineConfig(async () => {
   // `make web` runs the config generator first, so this matches the same
-  // CHESS_SERVER_URL (and Access token) as the watch build.
+  // CHESS_SERVER_URL as the watch build.
   const generated = existsSync(generatedConfigPath)
     ? (await import(pathToFileURL(generatedConfigPath).href)).default
     : null;
   const serverUrl = generated?.serverUrl || "";
-  const access = generated?.access;
-  const proxyHeaders = access?.clientId && access?.clientSecret
-    ? {
-        "CF-Access-Client-Id": access.clientId,
-        "CF-Access-Client-Secret": access.clientSecret,
-      }
-    : {};
 
   return {
     plugins: [
@@ -46,16 +39,17 @@ export default defineConfig(async () => {
     server: {
       fs: { allow: [root] },
       // The browser calls /api/* on the Vite origin (see httpAdapter.js), so
-      // this proxy is the only thing that talks to the tunnel. It also adds
-      // the Cloudflare Access service token, which avoids the Access CORS
-      // preflight rejection for direct browser requests.
+      // this proxy is the only thing that talks to the Worker. It avoids
+      // CORS/preflight issues on the Worker hostname. `make web` defaults
+      // CHESS_SERVER_URL to the local Worker dev server
+      // (http://localhost:8787); pass a different CHESS_SERVER_URL to
+      // point it at the deployed Worker instead.
       proxy: serverUrl
         ? {
             "/api": {
               target: serverUrl,
               changeOrigin: true,
               secure: true,
-              headers: proxyHeaders,
             },
           }
         : undefined,

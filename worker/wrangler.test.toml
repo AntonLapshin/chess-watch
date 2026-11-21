@@ -1,0 +1,22 @@
+# Test-only Wrangler config for `npm run test:workers`. Mirrors wrangler.toml
+# minus the production route, plus fake bearer tokens as plain vars.
+# NEVER deploy with this file, and never put real tokens here.
+name = "chess-watch-test"
+main = "src/index.js"
+compatibility_date = "2026-11-21"
+workers_dev = true
+
+[vars]
+CHESS_P1_NAME = "Aurora"
+CHESS_P2_NAME = "Sam"
+CHESS_OFFER_TTL = "120"
+CHESS_TOKEN_P1 = "test-token-p1-0000000000000001"
+CHESS_TOKEN_P2 = "test-token-p2-0000000000000002"
+
+[[durable_objects.bindings]]
+name = "CHESS_GAME"
+class_name = "ChessGame"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ChessGame"]

@@ -1,29 +1,37 @@
-# Chess Watch — top-level shortcuts. Server targets live in server/Makefile.
-.PHONY: help setup config pieces icons web build preview test server firewall firewall-status firewall-remove tunnel tunnel-status
+# Chess Watch — top-level shortcuts. Backend targets live in worker/.
+# `make web` points the browser harness at the local Worker dev server
+# (http://localhost:8787) unless CHESS_SERVER_URL is set in the environment
+# or on the command line, e.g.:
+#   CHESS_SERVER_URL=https://chess.gulfrenderstudio.com make web
+CHESS_SERVER_URL ?= http://localhost:8787
+
+.PHONY: help setup config pieces icons web build preview test worker-dev worker-test worker-deploy worker-secrets worker-logs
 
 help:
 	@echo "Targets:"
-	@echo "  make setup    npm install (root + web) + server venv + copy .env.example"
+	@echo "  make setup    npm install (root + web + worker) + copy .env.example"
 	@echo "  make config   generate shared/config.generated.js from .env"
 	@echo "  make pieces   generate piece PNGs"
 	@echo "  make icons    generate app icons"
-	@echo "  make web      Vite dev server (browser harness)"
+	@echo "  make web      Vite dev server (browser harness, local Worker)"
 	@echo "  make build    config + zeus build"
 	@echo "  make preview  config + zeus preview (QR for the Zepp app)"
-	@echo "  make server   start the relay server (see server/Makefile)"
-	@echo "  make firewall whitelist tcp/8787 to LAN + VPN (ufw)"
-	@echo "  make tunnel   create/refresh the Cloudflare Tunnel + subdomain"
-	@echo "  make test     vitest (JS) + server pytest"
+	@echo "  make worker-dev      wrangler dev (local Worker, port 8787)"
+	@echo "  make worker-test     worker unit + integration tests"
+	@echo "  make worker-deploy   wrangler deploy"
+	@echo "  make worker-secrets  print the wrangler secret put commands"
+	@echo "  make worker-logs     wrangler tail"
+	@echo "  make test     root vitest + worker vitest"
 
 setup:
 	cp -n .env.example .env || true
-	cp -n server/.env.example server/.env || true
+	cp -n worker/.dev.vars.example worker/.dev.vars || true
 	# Arch/Omarchy ship libvips; sharp otherwise tries to compile against it
 	# and fails without node-addon-api. Force its bundled prebuilt binary.
 	SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm install
 	npm install --prefix web
-	$(MAKE) -C server venv
-	@echo "setup done — fill in .env and server/.env, then: make config"
+	npm install --prefix worker
+	@echo "setup done — fill in .env and worker/.dev.vars, then: make config"
 
 config:
 	node scripts/gen-app-config.mjs
@@ -34,11 +42,12 @@ pieces:
 icons:
 	node scripts/gen-icons.mjs
 
-web: config
-	# Uses CHESS_SERVER_URL from .env (the public tunnel hostname by default).
-	# Override for a local relay without editing .env:
-	#   CHESS_SERVER_URL=http://localhost:8787 make web
-	npm run dev --prefix web
+web:
+	# CHESS_SERVER_URL defaults to the local Worker dev server above;
+	# the harness talks to it through the Vite /api proxy. Run
+	# `make worker-dev` in another terminal first.
+	CHESS_SERVER_URL=$(CHESS_SERVER_URL) node scripts/gen-app-config.mjs
+	CHESS_SERVER_URL=$(CHESS_SERVER_URL) npm run dev --prefix web
 
 build:
 	npm run config
@@ -48,24 +57,25 @@ preview:
 	npm run config
 	npx @zeppos/zeus-cli preview
 
-server:
-	$(MAKE) -C server start
+worker-dev:
+	npm run dev --prefix worker
 
-firewall:
-	scripts/firewall/open-8787.sh apply
+worker-test:
+	npm test --prefix worker
+	npm run test:workers --prefix worker
 
-firewall-status:
-	scripts/firewall/open-8787.sh status
+worker-deploy:
+	npm run deploy --prefix worker
 
-firewall-remove:
-	scripts/firewall/open-8787.sh remove
+worker-secrets:
+	@echo "Set the production bearer tokens (values never printed here):"
+	@echo "  wrangler secret put CHESS_TOKEN_P1   # from worker/.dev.vars or .env"
+	@echo "  wrangler secret put CHESS_TOKEN_P2"
+	@echo "Run from worker/ or with: cd worker && wrangler secret put ..."
 
-tunnel:
-	scripts/cloudflare/setup-tunnel.sh
-
-tunnel-status:
-	scripts/cloudflare/setup-tunnel.sh --status
+worker-logs:
+	npm run tail --prefix worker
 
 test:
 	npx vitest run --config vitest.config.mjs
-	$(MAKE) -C server test
+	npm test --prefix worker

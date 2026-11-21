@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { accessHeaders, checkHealth, callServer, toError } from "./httpClient.js";
+import { checkHealth, callServer, toError } from "./httpClient.js";
 
 const config = {
   serverUrl: "https://chess.example.com",
-  access: { clientId: "access-id", clientSecret: "access-secret" },
   players: { p1: { token: "player-token" } },
 };
 
@@ -11,23 +10,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("accessHeaders", () => {
-  it("returns service-token headers when configured", () => {
-    expect(accessHeaders(config)).toEqual({
-      "CF-Access-Client-Id": "access-id",
-      "CF-Access-Client-Secret": "access-secret",
-    });
-  });
-
-  it("returns nothing without a complete Access configuration", () => {
-    expect(accessHeaders({})).toEqual({});
-    expect(accessHeaders({ access: { clientId: "only-id" } })).toEqual({});
-    expect(accessHeaders(null)).toEqual({});
-  });
-});
-
 describe("checkHealth", () => {
-  it("sends the Access service token to /api/v1/health", async () => {
+  it("probes /api/v1/health with no auth headers", async () => {
     const fetchMock = vi.fn(async () => ({
       status: 200,
       body: JSON.stringify({ status: "ok" }),
@@ -37,10 +21,11 @@ describe("checkHealth", () => {
     await expect(checkHealth(config)).resolves.toEqual({ ok: true, status: 200 });
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toBe("https://chess.example.com/api/v1/health");
-    expect(opts.headers["CF-Access-Client-Id"]).toBe("access-id");
+    expect(opts.headers).not.toHaveProperty("CF-Access-Client-Id");
+    expect(opts.headers).not.toHaveProperty("Authorization");
   });
 
-  it("does not treat a followed Access login page as healthy", async () => {
+  it("does not treat an HTML error page as healthy", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({
       status: 200,
       body: "<!DOCTYPE html><title>Sign in</title>",
@@ -57,7 +42,7 @@ describe("checkHealth", () => {
 });
 
 describe("callServer", () => {
-  it("merges Access and bearer headers", async () => {
+  it("sends bearer headers (and no Cloudflare Access headers)", async () => {
     const fetchMock = vi.fn(async () => ({
       status: 200,
       body: JSON.stringify({ ok: true }),
@@ -76,11 +61,11 @@ describe("callServer", () => {
     expect(opts.method).toBe("POST");
     expect(opts.body).toBe('{"hello":"world"}');
     expect(opts.headers).toMatchObject({
-      "CF-Access-Client-Id": "access-id",
-      "CF-Access-Client-Secret": "access-secret",
       Authorization: "Bearer player-token",
       "Content-Type": "application/json",
     });
+    expect(opts.headers).not.toHaveProperty("CF-Access-Client-Id");
+    expect(opts.headers).not.toHaveProperty("CF-Access-Client-Secret");
   });
 
   it("does not call fetch without a player token", async () => {
@@ -91,7 +76,7 @@ describe("callServer", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("fails cleanly if Access returns an HTML login page with 200", async () => {
+  it("fails cleanly if the Worker returns an HTML error page with 200", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({
       status: 200,
       body: "<!DOCTYPE html><title>Sign in</title>",
@@ -101,7 +86,7 @@ describe("callServer", () => {
   });
 
   it("keeps an HTTP status as the error code when the body has none", () => {
-    // Cloudflare Access 403 / proxy 502 with an empty body used to
+    // A proxy 403 / 502 with an empty body used to
     // collapse to "unknown", hiding the exact failure from DIAG.
     expect(toError({ ok: false, status: 403, data: null })).toMatchObject({ code: "http_403" });
     expect(toError({ ok: false, status: 502, data: null })).toMatchObject({ code: "http_502" });
@@ -135,8 +120,8 @@ describe("callServer", () => {
     });
     expect(arg.headers).toMatchObject({
       Authorization: "Bearer player-token",
-      "CF-Access-Client-Id": "access-id",
     });
+    expect(arg.headers).not.toHaveProperty("CF-Access-Client-Id");
     vi.unstubAllGlobals();
   });
 
