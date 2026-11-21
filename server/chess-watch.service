@@ -14,7 +14,7 @@ Type=simple
 User=anton
 WorkingDirectory=/home/anton/chess-watch/server
 EnvironmentFile=/home/anton/chess-watch/server/.env
-ExecStart=/home/anton/chess-watch/server/.venv/bin/uvicorn app:app --host 0.0.0.0 --port 8787 --workers 1 --log-level info
+ExecStart=/home/anton/chess-watch/server/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8787 --workers 1 --log-level info
 Restart=on-failure
 RestartSec=5
 

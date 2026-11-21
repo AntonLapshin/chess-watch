@@ -8,9 +8,11 @@
 #   make logs       tail the server log
 #   make test       run pytest
 #
-# Bind address: make start HOST=0.0.0.0 PORT=8787
+# Bind address: make start HOST=127.0.0.1 PORT=8787
+# Loopback is the default because Cloudflare Tunnel (or another reverse proxy)
+# is expected to be the only way in. Use HOST=0.0.0.0 only for direct LAN access.
 
-HOST    ?= 0.0.0.0
+HOST    ?= 127.0.0.1
 PORT    ?= 8787
 VENV    ?= .venv
 UVICORN ?= $(VENV)/bin/uvicorn
@@ -31,7 +33,7 @@ IS_ON_PORT = tr '\0' ' ' < /proc/$(1)/cmdline 2>/dev/null | \
 
 help:
 	@echo "Targets: venv start stop restart status logs test"
-	@echo "Override with: make start HOST=0.0.0.0 PORT=8787"
+	@echo "Override with: make start HOST=127.0.0.1 PORT=8787 (HOST=0.0.0.0 for LAN)"
 
 venv:
 	python3 -m venv $(VENV)

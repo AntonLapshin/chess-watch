@@ -19,13 +19,17 @@ source of truth; the watches are thin tap-to-move clients.
 2. Generate two tokens:
    `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` (twice).
 3. Fill both `.env` files:
-   - `.env` — watch build: `CHESS_SERVER_URL` (LAN/VPN address of the
-     server; the watch cannot reach `localhost`), both tokens, names.
-   - `server/.env` — same tokens (see `server/.env.example`).
-4. `make server` — start the relay (single worker) on port 8787.
+   - `.env` — watch build: `CHESS_SERVER_URL` (the public HTTPS hostname
+     from Cloudflare Tunnel, e.g. `https://chess.gulfrenderstudio.com`;
+     a LAN/VPN address also works while the phone is on that network),
+     both tokens, names.
+   - `server/.env` — the **same** tokens, and `CHESS_HOST=127.0.0.1`
+     (loopback; the tunnel is the only way in).
+4. `make server` — start the relay (single worker) on `127.0.0.1:8787`.
 5. `make config` — generate `shared/config.generated.js` from `.env`.
 6. `make web` — test in the browser (`?player=p1` / `?player=p2` tabs).
-   It re-runs `make config` first, so `.env` edits are picked up.
+   It pins the harness to `http://localhost:8787`, so it bypasses
+   Cloudflare Access; `make build` / `make preview` use `.env`.
 7. `make preview` — scan the QR with the Zepp app on each watch, enable
    developer mode.
 
@@ -52,14 +56,32 @@ scripts/                   config / piece / icon generators
 docs/                      protocol.md, design.md, manual-test.md
 ```
 
+## Remote access (Cloudflare Tunnel)
+
+The watches use the phone's network, so they need a public HTTPS hostname,
+not a LAN IP. `scripts/cloudflare/` contains a setup script for a dedicated
+Cloudflare Tunnel plus a Cloudflare Access service token:
+
+```bash
+sudo scripts/cloudflare/setup-tunnel.sh          # chess.gulfrenderstudio.com
+sudo scripts/cloudflare/setup-tunnel.sh --status
+```
+
+The relay listens on `127.0.0.1:8787` only; `cloudflared` connects outbound,
+so no inbound port is open. Full walkthrough, Access policy, verification
+and troubleshooting: `scripts/cloudflare/README.md`.
+
 ## Security note
 
-Tokens are embedded in the bundle and extractable. Do not distribute the
-build; rotate by editing `.env` and rebuilding both watches.
+Tokens (player bearer tokens and the optional Cloudflare Access service
+token) are embedded in the bundle and extractable. Do not distribute the
+build; rotate by editing `.env` and rebuilding both watches. The server
+listens on loopback and is reached through Cloudflare Tunnel, so there is
+no public port to scan.
 
 ## Verification status (2026-11-21)
 
-Verified: server pytest 37/37, smoke script pass, JS vitest 11/11, `vite
+Verified: server pytest 37/37, smoke script pass, JS vitest 19/19, `vite
 build` pass, headless-Chromium screenshots of both presets (correct start
 position, flipped Black board, selection dots, last-move highlight), and a
 browser tap e2→e4 reaching the server (ply 1, turn b).

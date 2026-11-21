@@ -3,7 +3,7 @@
 // over HTTP — no BLE in the browser. Shares shared/httpClient.js with the
 // real side service so the request/response mapping is identical.
 import CONFIG from "../../../shared/config.generated.js";
-import { callServer, toError } from "../../../shared/httpClient.js";
+import { callServer, checkHealth, toError } from "../../../shared/httpClient.js";
 
 let _lastGood = null;
 
@@ -11,12 +11,7 @@ export async function handleRequest(req) {
   const method = req && req.method;
   const params = (req && req.params) || {};
   if (method === "PING") {
-    try {
-      const res = await fetch(`${CONFIG.serverUrl}/api/v1/health`);
-      return { ok: res.status >= 200 && res.status < 300 };
-    } catch (_) {
-      return { ok: false };
-    }
+    return checkHealth(CONFIG);
   }
   if (method === "GET_STATE") {
     const since = params.since != null ? params.since : 0;

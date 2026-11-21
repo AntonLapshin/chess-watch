@@ -15,7 +15,7 @@ watches through long-polling.
 ```bash
 make venv            # python3 -m venv .venv; pip install -r requirements.txt
 cp .env.example .env # then fill in two tokens (see below)
-make start           # start on 0.0.0.0:8787, wait for /health
+make start           # start on 127.0.0.1:8787, wait for /health
 make status          # is it running?
 make logs            # tail the log
 make stop            # stop it
@@ -44,7 +44,7 @@ are equal, or a token is shorter than 24 characters. Never commit `.env`.
 |---|---|---|
 | `CHESS_TOKEN_P1` / `CHESS_TOKEN_P2` | — (required) | Bearer tokens, ≥24 chars, must differ |
 | `CHESS_P1_NAME` / `CHESS_P2_NAME` | Aurora / Sam | Display names |
-| `CHESS_HOST` | `0.0.0.0` | Bind address |
+| `CHESS_HOST` | `127.0.0.1` | Bind address (loopback for tunnel; `0.0.0.0` for LAN) |
 | `CHESS_PORT` | `8787` | Port |
 | `CHESS_DB_PATH` | `./data/chess.sqlite3` | SQLite file (WAL); relative to repo root |
 | `CHESS_OFFER_TTL` | `120` | Offer expiry, seconds |
@@ -76,15 +76,52 @@ Error bodies are `{"code", "message"}` with a stable `code`
 
 ## Firewall
 
+With Cloudflare Tunnel the relay binds `127.0.0.1` and there is **no
+inbound port**, so no firewall rule is needed. The scripts below are for a
+direct LAN/VPN fallback (bind `HOST=0.0.0.0` first).
+
 The watches reach the server over LAN or VPN (Tailscale/WireGuard). Open
-port 8787 only on the LAN/VPN interface, e.g. with `ufw`:
+port 8787 only to those ranges. Helper scripts live in `scripts/firewall/`
+(see its README for details):
 
 ```bash
-sudo ufw allow from 192.168.1.0/24 to any port 8787
+# ufw (this host): auto-detect the LAN + VPN CIDRs, deny everything else
+sudo scripts/firewall/open-8787.sh apply
+
+# or pass ranges explicitly / replace old port rules
+sudo scripts/firewall/open-8787.sh apply 192.168.4.0/22 10.66.66.0/24
+sudo scripts/firewall/open-8787.sh apply --reset 192.168.4.0/22 10.66.66.0/24
+sudo scripts/firewall/open-8787.sh status
+sudo scripts/firewall/open-8787.sh remove
+
+# nftables-only hosts
+sudo scripts/firewall/open-8787-nft.sh apply
+```
+
+Or by hand with `ufw`:
+
+```bash
+sudo ufw allow from 192.168.1.0/24 to any port 8787 proto tcp
+sudo ufw deny 8787/tcp
 ```
 
 No TLS inside the app; for remote play put an HTTPS reverse proxy in front
 (out of scope for this setup).
+
+## Cloudflare Tunnel (remote watches)
+
+For watches outside the LAN, use the dedicated tunnel + Access service
+token walkthrough in `scripts/cloudflare/README.md`. In short:
+
+```bash
+sudo scripts/cloudflare/setup-tunnel.sh
+sudo scripts/cloudflare/setup-tunnel.sh --status
+```
+
+Then set `CHESS_SERVER_URL=https://chess.gulfrenderstudio.com` and the
+`CHESS_CF_ACCESS_CLIENT_ID` / `CHESS_CF_ACCESS_CLIENT_SECRET` values in the
+repo-root `.env`, run `make config`, and rebuild both watches. The relay
+stays on `127.0.0.1:8787`; `cloudflared` is the only way in.
 
 ## Backup
 

@@ -1,5 +1,5 @@
 # Chess Watch — top-level shortcuts. Server targets live in server/Makefile.
-.PHONY: help setup config pieces icons web build preview test server
+.PHONY: help setup config pieces icons web build preview test server firewall firewall-status firewall-remove tunnel tunnel-status
 
 help:
 	@echo "Targets:"
@@ -11,6 +11,8 @@ help:
 	@echo "  make build    config + zeus build"
 	@echo "  make preview  config + zeus preview (QR for the Zepp app)"
 	@echo "  make server   start the relay server (see server/Makefile)"
+	@echo "  make firewall whitelist tcp/8787 to LAN + VPN (ufw)"
+	@echo "  make tunnel   create/refresh the Cloudflare Tunnel + subdomain"
 	@echo "  make test     vitest (JS) + server pytest"
 
 setup:
@@ -32,7 +34,9 @@ pieces:
 icons:
 	node scripts/gen-icons.mjs
 
-web: config
+web:
+	# Browser harness talks to the local relay directly (no Cloudflare Access).
+	CHESS_SERVER_URL=http://localhost:8787 node scripts/gen-app-config.mjs
 	npm run dev --prefix web
 
 build:
@@ -45,6 +49,21 @@ preview:
 
 server:
 	$(MAKE) -C server start
+
+firewall:
+	scripts/firewall/open-8787.sh apply
+
+firewall-status:
+	scripts/firewall/open-8787.sh status
+
+firewall-remove:
+	scripts/firewall/open-8787.sh remove
+
+tunnel:
+	scripts/cloudflare/setup-tunnel.sh
+
+tunnel-status:
+	scripts/cloudflare/setup-tunnel.sh --status
 
 test:
 	npx vitest run --config vitest.config.mjs

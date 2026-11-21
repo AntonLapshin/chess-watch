@@ -27,7 +27,7 @@ class Config:
     token_p2: str
     p1_name: str = "Aurora"
     p2_name: str = "Sam"
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8787
     db_path: Path = Path("./data/chess.sqlite3")
     offer_ttl: int = 120
@@ -67,6 +67,11 @@ def load_config() -> Config:
         raise ConfigError(f"CHESS_TOKEN_P1 must be at least {MIN_TOKEN_LEN} characters")
     if len(p2) < MIN_TOKEN_LEN:
         raise ConfigError(f"CHESS_TOKEN_P2 must be at least {MIN_TOKEN_LEN} characters")
+    if p1.startswith("CHANGEME") or p2.startswith("CHANGEME"):
+        raise ConfigError(
+            "CHESS_TOKEN_P1/CHESS_TOKEN_P2 are still the .env.example placeholders; "
+            "generate real tokens and use the same values in both .env files"
+        )
 
     try:
         port = int(os.environ.get("CHESS_PORT", "8787"))
@@ -95,7 +100,7 @@ def load_config() -> Config:
         token_p2=p2,
         p1_name=os.environ.get("CHESS_P1_NAME", "Aurora") or "Aurora",
         p2_name=os.environ.get("CHESS_P2_NAME", "Sam") or "Sam",
-        host=os.environ.get("CHESS_HOST", "0.0.0.0"),
+        host=os.environ.get("CHESS_HOST", "127.0.0.1"),
         port=port,
         db_path=db_path,
         offer_ttl=offer_ttl,

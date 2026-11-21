@@ -6,10 +6,14 @@ Two watches (Bip 6 + Active 3 Premium) + the server on the LAN/VPN host.
 
 1. Register the app in console.zepp.com, put the numeric `appId` in
    `app.json` (currently `0` placeholder).
-2. Generate two tokens, fill `.env` (watch build) and `server/.env`.
-3. `make server` (or `make -C server start`), then `make config`.
-4. `make web` to test in the browser first (`?player=p1` / `?player=p2` tabs).
-5. `make preview`, scan with the Zepp app on each watch, enable developer mode.
+2. Generate two tokens, fill `.env` (watch build) and `server/.env` with
+   the same values; set `CHESS_HOST=127.0.0.1`.
+3. Set up the tunnel (`sudo scripts/cloudflare/setup-tunnel.sh`), the
+   Access service token, and `CHESS_CF_ACCESS_CLIENT_ID`/`_SECRET` in
+   `.env`; see `scripts/cloudflare/README.md`.
+4. `make server` (or `make -C server start`), then `make config`.
+5. `make web` to test in the browser first (`?player=p1` / `?player=p2` tabs).
+6. `make preview`, scan with the Zepp app on each watch, enable developer mode.
 
 ## Checklist
 
@@ -37,6 +41,10 @@ Two watches (Bip 6 + Active 3 Premium) + the server on the LAN/VPN host.
       watches, no accept possible afterwards.
 - [ ] Airplane mode mid-game: red dot, board stays on the last good state;
       reconnect → state refreshes, no duplicate moves.
+- [ ] Remote/cellular: turn off Wi-Fi on the phone, keep the watch paired;
+      moves still sync through `https://chess.gulfrenderstudio.com`.
+- [ ] Wrong/missing Access service token: the watch reports offline and
+      `curl` without the token gets 302/403 at the edge (expected).
 - [ ] Server restart mid-game: game survives (SQLite); both watches resume
       polling and see the same position.
 - [ ] Square vs round layout: status bar fits, Menu button reachable,
@@ -64,7 +72,8 @@ Two watches (Bip 6 + Active 3 Premium) + the server on the LAN/VPN host.
 - Server pytest: 37 tests green (rules, API, actions, config).
 - Smoke script: health, auth, move, long-poll wake, dedupe, 409 conflict,
   resign — all pass against real uvicorn.
-- JS vitest: 11 tests green (FEN parsing, both layouts, round corner radius).
+- JS vitest: 19 tests green (FEN parsing, both layouts, round corner radius,
+  HTTP Access/bearer headers).
 - Web harness: `vite build` passes; headless-Chromium screenshots of both
   presets show the correct start position; tap e2→e4 in the browser reached
   the server (ply 1, turn b); selection dots and last-move highlight
