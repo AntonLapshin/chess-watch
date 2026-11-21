@@ -11,6 +11,9 @@
 # --zone if route attachment needs an explicit zone (it is experimental in
 # wrangler 4.x and needs --x-route-zones). Dashboard alternative:
 # Workers & Pages -> chess-watch -> Settings -> Triggers -> Add route.
+#
+# Pass --dry-run to validate the deploy (bundling, bindings, route) without
+# deploying or needing a login: scripts/worker-deploy.sh --dry-run
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,12 +33,15 @@ fi
 if [ -z "$HOST" ] || [[ "$HOST" == *.workers.dev ]] \
     || [[ "$HOST" == localhost || "$HOST" == 127.0.0.1 ]]; then
   echo "worker-deploy: no custom domain in CHESS_SERVER_URL ($URL) — plain deploy (workers.dev URL only)."
-  exec npx wrangler deploy
+  exec npx wrangler deploy "$@"
 fi
 
-ARGS=(deploy --route "$HOST/*")
+ARGS=(--route "$HOST/*")
 if [ -n "${CHESS_WORKER_ZONE:-}" ]; then
   ARGS+=(--x-route-zones --zone "$CHESS_WORKER_ZONE")
+fi
+if [ "${1:-}" = "--dry-run" ]; then
+  ARGS+=(--dry-run)
 fi
 echo "worker-deploy: deploying with route $HOST/*"
 exec npx wrangler deploy "${ARGS[@]}"

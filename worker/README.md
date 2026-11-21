@@ -114,6 +114,7 @@ curl -s -H "Authorization: Bearer $CHESS_TOKEN_P1" \
 ## Deploy + cutover
 
 ```bash
+make worker-login     # first time only: authorizes wrangler (opens a browser)
 make worker-secrets   # interactive: sets CHESS_TOKEN_P1 / CHESS_TOKEN_P2
 make worker-deploy    # deploys; attaches the route from CHESS_SERVER_URL
 ```
@@ -125,8 +126,22 @@ make worker-deploy    # deploys; attaches the route from CHESS_SERVER_URL
 Optional `CHESS_WORKER_ZONE` (in `.env` or the environment) is passed as
 `--zone` if route attachment needs an explicit zone. If
 `CHESS_SERVER_URL` is unset, localhost, or a `*.workers.dev` URL, the
-deploy is plain (workers.dev URL only). Dashboard alternative:
-Workers & Pages → chess-watch → Settings → Triggers → Add route.
+deploy is plain (workers.dev URL only). To validate the deploy without
+deploying or logging in: `bash scripts/worker-deploy.sh --dry-run`.
+
+Dashboard half of the deploy (dash.cloudflare.com; also summarized in
+the root README): the custom domain must be a Cloudflare zone (DNS
+managed by Cloudflare). After deploying, check Workers & Pages →
+chess-watch for the deployment and version 0.2.0. Settings → Variables
+→ Secrets is the dashboard alternative to `make worker-secrets`;
+Settings → Triggers → Routes is the alternative to the `--route` the
+deploy script passes (add the route there if you deploy without it).
+Observability → Logs (or `make worker-logs`) is where runtime errors
+surface. After the first real request, Workers & Pages → Durable
+Objects lists the `ChessGame` namespace — a redeploy keeps it, so the
+game survives deploys. If wrangler reports an auth error, run
+`make worker-login` again (or `cd worker && npx wrangler whoami` to
+check who is logged in).
 
 Cutover from the old 0.1.x setup (tunnel + Access — delete all of it;
 the old game does NOT migrate, the first Worker game starts fresh at

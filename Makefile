@@ -11,7 +11,7 @@
 # prefer bare commands.)
 CHESS_SERVER_URL ?= http://localhost:8787
 
-.PHONY: help setup config pieces icons web build preview test worker-dev worker-test worker-deploy worker-secrets worker-logs
+.PHONY: help setup config pieces icons web build preview test worker-dev worker-test worker-deploy worker-secrets worker-logs worker-login
 
 help:
 	@echo "Targets:"
@@ -27,6 +27,7 @@ help:
 	@echo "  make worker-deploy   deploy the Worker (route from CHESS_SERVER_URL)"
 	@echo "  make worker-secrets  set the production bearer tokens (interactive)"
 	@echo "  make worker-logs     tail the deployed Worker logs"
+	@echo "  make worker-login    log wrangler into your Cloudflare account"
 	@echo "  make test     root vitest + worker vitest"
 
 setup:
@@ -82,6 +83,9 @@ worker-secrets:
 
 worker-logs:
 	npm run tail --prefix worker
+
+worker-login:
+	cd worker && npx wrangler login
 
 test:
 	npx vitest run --config vitest.config.mjs

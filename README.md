@@ -20,11 +20,14 @@ resign is immediate. Browser development through `zepp-web-runner`
    `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` (twice).
    Fill in `.env` — `CHESS_SERVER_URL` (the Worker URL), both tokens,
    names — and put the SAME tokens in `worker/.dev.vars`.
-3. `make worker-secrets` — set the production tokens (interactive).
-   `make worker-deploy` — deploy the Worker (route from
-   `CHESS_SERVER_URL`); or `make worker-dev` for local testing on
-   `http://localhost:8787`. No global wrangler install needed — the make
-   targets and `cd worker && npx wrangler <cmd>` use the local one.
+3. `make worker-login` (first time only — authorizes wrangler in your
+   Cloudflare account), `make worker-secrets` — set the production
+   tokens (interactive), `make worker-deploy` — deploy the Worker
+   (route from `CHESS_SERVER_URL`); or `make worker-dev` for local
+   testing on `http://localhost:8787`. No global wrangler install
+   needed — the make targets and `cd worker && npx wrangler <cmd>` use
+   the local one. See "Cloudflare dashboard checklist" below for the
+   dashboard half of the deploy.
 4. Register the app in console.zepp.com and put the numeric `appId` in
    `app.json` (already `1137599` — only needed when starting from scratch).
 5. `make config` — generate `shared/config.generated.js` from `.env`.
@@ -38,6 +41,34 @@ resign is immediate. Browser development through `zepp-web-runner`
 `make test` runs the root JS vitest suite and the worker unit tests;
 `make worker-test` adds the workerd integration suite. `make pieces` /
 `make icons` regenerate the PNG assets.
+
+## Cloudflare dashboard checklist
+
+Do these at [dash.cloudflare.com](https://dash.cloudflare.com) (details
+in `worker/README.md` § Deploy + cutover):
+
+- **Account + login:** the custom domain must be a Cloudflare zone (DNS
+  managed by Cloudflare). `make worker-login` authorizes wrangler; check
+  it with `cd worker && npx wrangler whoami`.
+- **Workers & Pages → chess-watch:** after `make worker-deploy`, check
+  the deployment is listed and the version is 0.2.0. Settings →
+  Variables → Secrets shows `CHESS_TOKEN_P1` / `CHESS_TOKEN_P2`
+  (the dashboard alternative to `make worker-secrets`); Settings →
+  Triggers → Routes shows the custom-domain route (the alternative to
+  the `--route` the deploy script passes). Observability → Logs (or
+  `make worker-logs`) is where runtime errors surface.
+- **Durable Object:** after the first real request, Workers & Pages →
+  Durable Objects lists the `ChessGame` namespace — that is where the
+  game lives; a redeploy keeps it (DO SQLite survives).
+- **Cutover (only if the old tunnel setup still exists):** DNS → delete
+  the tunnel CNAME for the custom domain; Zero Trust → Access →
+  Applications → delete the Chess Watch app and its Service Auth policy;
+  Zero Trust → Access → Service Auth → Service Tokens → delete the
+  service token; on the laptop, stop/disable `cloudflared-chess-watch`
+  and delete the tunnel.
+- **Verify:** `curl $CHESS_SERVER_URL/api/v1/health` →
+  `{"status":"ok","version":"0.2.0"}` (also check the workers.dev URL
+  first, before the route attaches).
 
 ## Repo layout
 
