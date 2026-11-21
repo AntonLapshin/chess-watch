@@ -99,4 +99,45 @@ describe("callServer", () => {
     const result = await callServer(config, "p1", "/api/v1/state");
     expect(result).toMatchObject({ ok: false, code: "network" });
   });
+
+  it("uses the single-object fetch shape on the Zepp side service", async () => {
+    vi.stubGlobal("messaging", { peerSocket: {} });
+    const fetchMock = vi.fn(async () => ({
+      status: 200,
+      body: JSON.stringify({ ok: true }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await callServer(config, "p1", "/api/v1/state?since=0", {
+      method: "POST",
+      body: { hello: "world" },
+      timeoutMs: 12345,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [arg] = fetchMock.mock.calls[0];
+    expect(arg).toMatchObject({
+      url: "https://chess.example.com/api/v1/state?since=0",
+      method: "POST",
+      body: '{"hello":"world"}',
+      timeout: 12345,
+    });
+    expect(arg.headers).toMatchObject({
+      Authorization: "Bearer player-token",
+      "CF-Access-Client-Id": "access-id",
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("treats a parseable body without status as ok (side-service shape)", async () => {
+    vi.stubGlobal("messaging", { peerSocket: {} });
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      body: { revision: 3, game: {} },
+    })));
+    const result = await callServer(config, "p1", "/api/v1/state");
+    expect(result.ok).toBe(true);
+    expect(result.data).toEqual({ revision: 3, game: {} });
+    vi.unstubAllGlobals();
+  });
 });

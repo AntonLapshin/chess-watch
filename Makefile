@@ -34,9 +34,10 @@ pieces:
 icons:
 	node scripts/gen-icons.mjs
 
-web:
-	# Browser harness talks to the local relay directly (no Cloudflare Access).
-	CHESS_SERVER_URL=http://localhost:8787 node scripts/gen-app-config.mjs
+web: config
+	# Uses CHESS_SERVER_URL from .env (the public tunnel hostname by default).
+	# Override for a local relay without editing .env:
+	#   CHESS_SERVER_URL=http://localhost:8787 make web
 	npm run dev --prefix web
 
 build:

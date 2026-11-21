@@ -1,8 +1,8 @@
 // Generate shared/config.generated.js from the root .env (gitignored).
 // Validates: non-empty tokens, absolute server URL, no trailing slash.
-// Warns when the URL is localhost/127.0.0.1: the watch cannot reach it
-// (use the LAN/VPN address for on-device builds; localhost is fine for
-// the web harness).
+// Warns when the URL is localhost/127.0.0.1: the watch cannot reach it.
+// `make web` also uses this value; override it on the command line to point
+// the browser harness at a local relay.
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -67,7 +67,7 @@ if (serverUrl.endsWith("/")) fail("CHESS_SERVER_URL must not end with a trailing
 if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
   console.warn(
     "gen-app-config: WARNING: CHESS_SERVER_URL is localhost — the watch cannot reach it. " +
-    "Use the LAN/VPN address for on-device builds; localhost is fine for `make web`.",
+    "Use the LAN/VPN or Cloudflare Tunnel address for both the watch and `make web`.",
   );
 } else if (url.protocol !== "https:") {
   console.warn(

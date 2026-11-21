@@ -35,6 +35,11 @@ let _hapticsOn = true;
 let _page = null;
 let _lastCheck = false;
 let _lastPly = -1;
+// Link diagnostics for the connecting screen (no tokens involved).
+let _netError = null;   // { code, message } of the latest poll failure
+let _netAttempts = 0;
+let _diag = null;       // DIAG payload from the side service, or { error }
+let _diagBusy = false;
 
 function urlPlayerParam() {
   try {
@@ -68,6 +73,7 @@ function onState(state) {
   const prevPly = _lastPly;
   const prevCheck = _lastCheck;
   _state = state;
+  _netError = null;
   _lastPly = state.game.ply;
   _lastCheck = state.game.check;
   _selected = null;
@@ -150,12 +156,23 @@ function onSquare(uci) {
 
 function startController() {
   if (!_role || _controller) return;
+  _netError = null;
+  _netAttempts = 0;
+  _diag = null;
+  _diagBusy = false;
   _controller = new Controller({
     role: _role,
     request: (req) => _page.request(req),
     onState,
     onConnection,
     onToast: showToast,
+    onPollError: (err, attempts) => {
+      _netError = err;
+      _netAttempts = attempts;
+      // Only re-render for the connecting screen; during a game the red
+      // dot already reflects the outage and we must not disturb play.
+      if (!_state && _page) _page.render();
+    },
   });
   _controller.start();
 }
@@ -243,6 +260,58 @@ Page(
             x: 0, y: 200, w: _layout.width, h: 40,
             text: "Connecting…", text_size: 20, color: THEME.textSecondary,
             align_h: hmUI.align.CENTER_H, align_v: hmUI.align.CENTER_V,
+          }),
+        );
+        // Show WHY we are still here: the latest poll error, and the
+        // side-service diagnostic (fetch shape, live ping, last outcome).
+        // This is the fastest way to tell a dead relay, a rejected token,
+        // and a broken phone link apart — report these lines verbatim.
+        let dy = 244;
+        const diagLine = (str) => {
+          _widgets.push(
+            hmUI.createWidget(hmUI.widget.TEXT, {
+              x: 10, y: dy, w: _layout.width - 20, h: 24,
+              text: str, text_size: 16, color: THEME.textSecondary,
+              align_h: hmUI.align.CENTER_H, align_v: hmUI.align.CENTER_V,
+            }),
+          );
+          dy += 24;
+        };
+        if (_netError) {
+          diagLine(`Err: ${_netError.code} (try ${_netAttempts})`);
+        }
+        if (_diag && !_diag.error) {
+          diagLine(`Side: ${_diag.shape}`);
+          diagLine(`Ping: ${_diag.ping && _diag.ping.ok ? "ok" : "FAIL"}`);
+          if (_diag.lastFetch) {
+            const lf = _diag.lastFetch;
+            diagLine(`Last: ${lf.where} ${lf.ok ? "ok" : lf.code} ${lf.status != null ? lf.status : ""}`);
+          } else {
+            diagLine("Last: no server call yet");
+          }
+        } else if (_diag && _diag.error) {
+          diagLine(`Diag: side unreachable (${_diag.error})`);
+        }
+        const tbw = 200;
+        _widgets.push(
+          hmUI.createWidget(hmUI.widget.BUTTON, {
+            x: Math.floor((_layout.width - tbw) / 2),
+            y: _layout.menu.y - 48, w: tbw, h: 38,
+            text: _diagBusy ? "Testing…" : "Test link", text_size: 18,
+            radius: 10, normal_color: THEME.button, color: THEME.buttonText,
+            click_func: async () => {
+              if (_diagBusy || !_controller) return;
+              _diagBusy = true;
+              _diag = null;
+              this.render();
+              try {
+                _diag = await _controller.runDiag();
+              } catch (e) {
+                _diag = { error: (e && e.code) || "unknown" };
+              }
+              _diagBusy = false;
+              this.render();
+            },
           }),
         );
       }

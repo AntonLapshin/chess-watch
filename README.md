@@ -28,8 +28,11 @@ source of truth; the watches are thin tap-to-move clients.
 4. `make server` — start the relay (single worker) on `127.0.0.1:8787`.
 5. `make config` — generate `shared/config.generated.js` from `.env`.
 6. `make web` — test in the browser (`?player=p1` / `?player=p2` tabs).
-   It pins the harness to `http://localhost:8787`, so it bypasses
-   Cloudflare Access; `make build` / `make preview` use `.env`.
+   It regenerates the config from `.env`, then Vite proxies `/api` to
+   `CHESS_SERVER_URL` and adds the Cloudflare Access service-token headers
+   server-side. The browser never calls the tunnel directly, so CORS and
+   Access preflight do not get in the way. To use a local relay instead,
+   run `CHESS_SERVER_URL=http://localhost:8787 make web`.
 7. `make preview` — scan the QR with the Zepp app on each watch, enable
    developer mode.
 

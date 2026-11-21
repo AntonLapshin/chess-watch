@@ -57,8 +57,8 @@ function App() {
       </div>
       <div style={{ fontSize: 13, color: "#a9b4c0", maxWidth: 520, textAlign: "center" }}>
         Same page/index.js as the watch. Open a second tab with ?player=p2
-        to play both sides. Needs the server running and a generated
-        shared/config.generated.js (npm run config).
+        to play both sides. Start with `make web`; /api is proxied to
+        CHESS_SERVER_URL from .env.
       </div>
     </div>
   );

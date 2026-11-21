@@ -1,6 +1,15 @@
 // Generate flat geometric chess pieces: SVG -> PNG via sharp.
 // Output: images/pieces/{s,r}/<color><type>.png (12 each) at 38px (square)
-// and 37px (round), plus web/public/images/pieces/{s,r}/ copies.
+// and 37px (round), mirrored to web/public/images/pieces/{s,r}/ for the
+// browser harness.
+//
+// Watch packaging note: zeus only bundles `assets/<target>.<shape>/`, never
+// the top-level `images/` dir — so piece PNGs under `images/` alone never
+// reach the watch and the board renders with no pieces. Emit copies into
+// both per-shape asset dirs as well: assets/default.s/pieces/<s|r>/ and
+// assets/default.r/pieces/<s|r>/. board.js addresses pieces as
+// `pieces/<shape>/<color><type>.png`, which resolves against each target's
+// asset root on-device and against web/public in the browser.
 // White pieces: #FFFFFF fill, #101418 outline. Black: #14181C fill, #FFFFFF outline.
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -41,6 +50,9 @@ for (const [shape, size] of Object.entries(SIZES)) {
       for (const base of [
         path.join(root, "images", "pieces", shape),
         path.join(root, "web", "public", "images", "pieces", shape),
+        // Per-shape asset roots: zeus packages assets/<target>.<shape>/.
+        path.join(root, "assets", "default.s", "pieces", shape),
+        path.join(root, "assets", "default.r", "pieces", shape),
       ]) {
         mkdirSync(base, { recursive: true });
         writeFileSync(path.join(base, `${color}${type}.png`), png);

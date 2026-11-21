@@ -18,7 +18,9 @@ Bip 6 / Active 3 ──BLE──> Zepp app (side service) ──HTTP──> Fast
   on the watch. The page talks to it through `BasePage.request()`.
 - **Web harness** (`web/`): Vite + React + zepp-web-runner runs the same
   `page/index.js` in the browser. A local `BasePage` shim calls the same
-  HTTP adapter directly (no BLE).
+  HTTP adapter directly (no BLE). Requests use `/api` on the Vite origin;
+  Vite proxies them to `CHESS_SERVER_URL` and adds the Cloudflare Access
+  service-token headers, avoiding CORS/preflight on the tunnel hostname.
 
 ## State machine (page)
 
@@ -31,6 +33,10 @@ tap a target → promotion picker if needed → send with a fresh idempotent
 
 Poll loop: `GET_STATE { since: revision, wait: 20 }`; on error the red dot
 shows and retry backs off 3 s → 10 s; `onHide` stops, `onShow` refreshes.
+The connecting screen shows the latest poll error code plus a "Test link"
+button: it asks the side service for DIAG (fetch call shape, live `/health`
+ping, last server-call outcome — no tokens), so an offline watch reports
+exactly where the link breaks instead of guessing.
 First poll sends `since: -1` so it returns immediately (a fresh game has
 revision 0). A revision conflict triggers an immediate refresh, never a
 retry. Failed sends retry with the same client id (idempotent server-side).
@@ -55,9 +61,12 @@ piece 37. Status bar and 160×40 Menu button per `page/layout.js`.
 
 ## Pieces
 
-Flat geometric SVGs rendered by `scripts/gen-pieces.mjs` (sharp) at 38 px
-(square) and 37 px (round) into `images/pieces/{s,r}/` (12 PNGs each) and
-mirrored to `web/public/images/pieces/`. White: `#FFFFFF` fill, `#101418`
+Pieces are generated per shape (38 px square, 37 px round) because zeus
+only packages `assets/<target>.<shape>/` — a top-level `images/` dir never
+reaches the watch. `scripts/gen-pieces.mjs` therefore also emits
+`assets/default.{s,r}/pieces/{s,r}/` (board.js addresses
+`pieces/<shape>/<color><type>.png`, which resolves against each target's
+asset root on-device and against `web/public/images/` in the browser). White: `#FFFFFF` fill, `#101418`
 outline. Black: `#14181C` fill, `#FFFFFF` outline. Icons are a 192×192
 checker + knight mark (`scripts/gen-icons.mjs`).
 
@@ -104,10 +113,12 @@ checker + knight mark (`scripts/gen-icons.mjs`).
 1. **`app-side` module key** — `app.json` uses
    `"module": {"app-side": {"path": "app-side/index"}}` per plan; Zeus
    build still to be attempted (see below).
-2. **Zepp `fetch` response shape** — `shared/httpClient.js` parses
-   `res.body` as string or object, and falls back to `res.json()` /
-   `res.text()`; status is inferred from the parsed body when needed.
-   Unverified on-device.
+2. **Zepp `fetch` response shape** — `shared/httpClient.js` uses the
+   side-service call shape `fetch({ url, method, headers, body, timeout })`
+   on-device (detected via `sideService`/`messaging` globals) and the
+   standard `fetch(url, {...})` shape in browsers/Node; `parseBody` handles
+   `res.body` as string or object plus the browser `.json()` path, and a
+   missing `res.status` is inferred from whether the body parsed.
 3. **`IMG` sizing** — avoided by generating 38/37 px assets per shape.
 4. **`FILL_RECT` radius/alpha** — verified in the runner source:
    `WidgetRenderer.jsx` passes `radius` to `borderRadius` and decodes the

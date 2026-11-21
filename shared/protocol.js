@@ -52,17 +52,21 @@ export function nextClientId(role) {
 }
 
 /** Fake start-position state, used when the server is unreachable so the
- *  board still renders (offline dot shown). Never used for moves. */
-export function fakeInitialState(role) {
+ *  board still renders (offline dot shown). Never used for moves.
+ *  `names` ({ p1, p2 }) overrides the built-in defaults so the side service
+ *  — which knows the generated config — can supply the real .env names. */
+export function fakeInitialState(role, names) {
+  const p1 = (names && names.p1) || "Aurora";
+  const p2 = (names && names.p2) || "Sam";
   const youColor = role === "p1" ? "w" : "b";
   return {
     revision: 0,
     server_time: Date.now() / 1000,
     game_no: 1,
-    you: { role, color: youColor, name: role === "p1" ? "Aurora" : "Sam" },
+    you: { role, color: youColor, name: role === "p1" ? p1 : p2 },
     opponent: {
       role: role === "p1" ? "p2" : "p1",
-      name: role === "p1" ? "Sam" : "Aurora",
+      name: role === "p1" ? p2 : p1,
       color: youColor === "w" ? "b" : "w",
       online: false,
     },

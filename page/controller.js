@@ -8,17 +8,20 @@ const RETRY_MAX_MS = 10000;
 const SEND_RETRIES = 3;
 
 export class Controller {
-  constructor({ role, request, onState, onConnection, onToast }) {
+  constructor({ role, request, onState, onConnection, onToast, onPollError }) {
     this.role = role;
     this.request = request;
     this.onState = onState;
     this.onConnection = onConnection;
     this.onToast = onToast;
+    this.onPollError = onPollError;
     this.state = null;
     // -1: the first poll must return immediately (server returns at once
     // only when since < revision; a fresh game has revision 0).
     this.revision = -1;
     this.running = false;
+    this.attempts = 0;
+    this.lastError = null;
     this._pollTimer = null;
     this._retryDelay = RETRY_BASE_MS;
     this._pollInFlight = false;
@@ -53,6 +56,7 @@ export class Controller {
   async _poll() {
     if (!this.running || this._pollInFlight) return;
     this._pollInFlight = true;
+    this.attempts += 1;
     try {
       const res = await this.request({
         method: "GET_STATE",
@@ -63,16 +67,24 @@ export class Controller {
       this._retryDelay = RETRY_BASE_MS;
       this.state = res;
       this.revision = res.revision;
+      this.lastError = null;
       this.onConnection(true);
       this.onState(res);
       this._schedulePoll(0); // long-poll again immediately
     } catch (e) {
       this._pollInFlight = false;
       this.onConnection(false);
+      this.lastError = {
+        code: (e && e.code) || "unknown",
+        message: (e && e.message) || String((e && e.code) || "failed"),
+      };
+      if (this.onPollError) this.onPollError(this.lastError, this.attempts);
       if (!this.state) {
         // Nothing rendered yet: show the start position with an offline dot
-        // so the board is usable-looking while the link is down.
-        this.state = fakeInitialState(this.role);
+        // so the board is usable-looking while the link is down. The side
+        // service attaches the real .env names (it holds the config); the
+        // page bundle itself must not import the tokens.
+        this.state = fakeInitialState(this.role, e && e.names);
         this.onState(this.state);
       }
       const delay = this._retryDelay;
@@ -89,6 +101,16 @@ export class Controller {
       this._pollTimer = null;
     }
     this._poll();
+  }
+
+  /** Side-service link diagnostic (no tokens cross the bridge). */
+  async runDiag() {
+    try {
+      const res = await this.request({ method: "DIAG", params: {} });
+      return res || { error: "unknown" };
+    } catch (e) {
+      return { error: (e && e.code) || "unknown", message: (e && e.message) || String(e) };
+    }
   }
 
   async submitMove(from, to, promotion) {

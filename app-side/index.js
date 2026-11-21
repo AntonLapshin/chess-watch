@@ -1,11 +1,49 @@
 // Companion app (side service): the ONLY place that talks to the network.
 // The page reaches it through BasePage.request(); the web harness calls the
 // same HTTP adapter directly (see web/src/adapters/httpAdapter.js).
-import { BaseSideService } from "@zeppos/zml/base-app";
+import { BaseSideService } from "@zeppos/zml/base-side";
 import CONFIG from "../shared/config.generated.js";
-import { callServer, checkHealth, toError } from "../shared/httpClient.js";
+import { callServer, checkHealth, fetchShape, serverHost, toError } from "../shared/httpClient.js";
 
 let _lastGood = null;
+// Last server round-trip outcome (no tokens — safe to expose via DIAG).
+let _lastFetch = null;
+let _calls = 0;
+
+// Real display names for the offline fallback. The page bundle must not
+// import the generated config (it holds the bearer tokens), so the side
+// service — which does hold it — attaches the names to errors raised
+// before any good state exists. The controller passes them through to
+// fakeInitialState(), keeping the offline board labelled per .env.
+function offlineNames() {
+  return {
+    p1: CONFIG.players.p1.name,
+    p2: CONFIG.players.p2.name,
+  };
+}
+
+function offlineError(result) {
+  return { ...toError(result), names: offlineNames() };
+}
+
+function hostOf(url) {
+  return serverHost({ serverUrl: url });
+}
+
+// Same callServer both the poll and the moves use, but records the outcome
+// for DIAG so the watch screen can show where the link breaks.
+async function trackedCall(where, role, path, opts) {
+  _calls += 1;
+  const result = await callServer(CONFIG, role, path, opts);
+  _lastFetch = {
+    where,
+    ok: result.ok,
+    status: result.status != null ? result.status : null,
+    code: result.code || null,
+    at: Date.now(),
+  };
+  return result;
+}
 
 async function handleRequest(req) {
   const method = req && req.method;
@@ -16,8 +54,8 @@ async function handleRequest(req) {
   if (method === "GET_STATE") {
     const since = params.since != null ? params.since : 0;
     const wait = params.wait != null ? params.wait : 20;
-    const result = await callServer(
-      CONFIG, params.role,
+    const result = await trackedCall(
+      "state", params.role,
       `/api/v1/state?since=${since}&wait=${wait}&presence=1`,
       { timeoutMs: (wait + 15) * 1000 },
     );
@@ -26,10 +64,10 @@ async function handleRequest(req) {
       return result.data;
     }
     if (_lastGood) return _lastGood; // flaky link can still render something
-    throw toError(result);
+    throw offlineError(result);
   }
   if (method === "MOVE") {
-    const result = await callServer(CONFIG, params.role, "/api/v1/move", {
+    const result = await trackedCall("move", params.role, "/api/v1/move", {
       method: "POST",
       body: {
         client_move_id: params.clientMoveId,
@@ -47,7 +85,7 @@ async function handleRequest(req) {
     throw toError(result);
   }
   if (method === "ACTION") {
-    const result = await callServer(CONFIG, params.role, "/api/v1/action", {
+    const result = await trackedCall("action", params.role, "/api/v1/action", {
       method: "POST",
       body: {
         client_action_id: params.clientActionId,
@@ -62,6 +100,23 @@ async function handleRequest(req) {
       return result.data;
     }
     throw toError(result);
+  }
+  if (method === "DIAG") {
+    // Link diagnostic for the on-watch "Test link" button. Runs a live
+    // health probe through the same fetch path as the poll, so the screen
+    // can show whether the side service reaches the relay at all. Contains
+    // no tokens: host, shape, probe outcome, last poll outcome, names only.
+    const ping = await checkHealth(CONFIG);
+    return {
+      shape: fetchShape(),
+      host: hostOf(CONFIG.serverUrl),
+      ping,
+      calls: _calls,
+      lastFetch: _lastFetch,
+      names: offlineNames(),
+      hasTokens: Boolean(CONFIG.players.p1.token && CONFIG.players.p2.token),
+      access: Boolean(CONFIG.access && CONFIG.access.clientId),
+    };
   }
   throw { code: "unknown", message: `unknown method ${method}` };
 }
