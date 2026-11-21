@@ -85,7 +85,7 @@ verbatim; the table below is what they mean.
 |---|---|---|
 | `Build:` older than `git rev-parse HEAD`, or `Names: Aurora / Sam` when `.env` says otherwise | The watch is running a stale install | `make preview` again from the current checkout and reinstall; check the Build line changes |
 | `Host: localhost…` / `127.0.0.1` | Stale build baked with a dev URL | Same as above — the watch cannot reach localhost |
-| `Poll err: 1` / `Diag: side unreachable` | The page never reached the side service (ZML BLE shake timed out after 5 s) | Keep the Zepp app open in the foreground, Bluetooth on, watch paired; reinstall via a fresh `make preview` (a pre-fix build crashes its side service on load) |
+| `Poll err: 1` / `Diag: side unreachable` | The page never reached the side service (ZML BLE shake timed out after 5 s). The app-side code matches the official `fetch-api` sample exactly (same `BaseSideService` wiring, same bundler output, ZML 0.0.38 vs 0.0.43 transport identical) and the `.zab` contains the side service — so this is the phone side, not the code: the side service is not running in the Zepp app | Keep the Zepp app open in the foreground, Bluetooth on, watch paired; reinstall via a fresh `make preview`. Then prove it on the phone: Zepp app → Profile → Settings → About → tap the Zepp icon 7× (Developer Mode) → Mini Program icon → log screen → **Side Service** tab. If it is empty, the side service never started — the `[chess-watch] side service init …` line (0.1.2+) must appear there after opening the app on the watch. If it appears and the watch still reports Err 1, the Zepp-app bridge itself is not answering (try force-stopping and reopening the Zepp app, then re-running Test link) |
 | `Ping: FAIL` + `Last: state http_403` | Cloudflare Access rejected the service token | Recheck `CHESS_CF_ACCESS_CLIENT_ID`/`_SECRET` in `.env` and the Service Auth policy on the Access application, then rebuild |
 | `Ping: ok` + `Last: state unauthorized` | Player tokens differ between `.env` and `server/.env` | Copy the same tokens into both files (see `scripts/cloudflare/README.md` §0) and restart the server + rebuild |
 | `Ping: FAIL` + `Last: state timeout` / `network` | Phone has no route to the tunnel, or the tunnel/server is down | `curl` the health URL with the Access headers from a laptop (see `scripts/cloudflare/README.md` §3); check `make -C server status` and `scripts/cloudflare/setup-tunnel.sh --status` |
@@ -106,16 +106,19 @@ no public port to scan.
 ## Verification status (2026-11-21)
 
 Verified: server pytest 37/37, smoke script pass, JS vitest 27/27, `vite
-build` pass, `zeus build` pass (0.1.1, all 4 targets), headless-Chromium
+build` pass, `zeus build` pass (0.1.2, all 4 targets), headless-Chromium
 screenshots of both presets (correct start position, flipped Black board,
 selection dots, last-move highlight), a browser tap e2→e4 reaching the
 server (ply 1, turn b), preset switching Bip 6 ↔ Active 3 in `make web`
 (board re-renders both ways — previously black after switching, see
 `docs/design.md` §7), and Menu → Test link opening the Diagnostics overlay
 on both presets, including with the server down (offline board + `Ping:
-FAIL` + `Last: state http_500`).
+FAIL` + `Last: state http_500` + the true `Poll err: http_500`, which
+0.1.1 misreported as `none`).
 
-Not yet verified on-device (see `docs/manual-test.md`): the 0.1.1 build
+Not yet verified on-device (see `docs/manual-test.md`): the 0.1.2 build
 has not been installed on either watch yet. The first thing to check after
-installing it is Menu → Test link and the decision table above. Also
-unconfirmed: Vibrator availability, console icon acceptance.
+installing it is Menu → Test link and the decision table above — and, for
+a shake timeout (Err 1), the Zepp app's Side Service log screen, which is
+the only place that can show whether the side service started on the
+phone. Also unconfirmed: Vibrator availability, console icon acceptance.

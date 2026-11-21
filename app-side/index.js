@@ -48,9 +48,23 @@ async function trackedCall(where, role, path, opts) {
   return result;
 }
 
+// Side-service log, visible in the Zepp app's real-device log screen
+// (Developer Mode: Profile → Settings → About → tap the Zepp icon 7×,
+// then the Mini Program icon → Side Service). The official fetch-api
+// sample logs the same way (console.log in onRequest). No tokens here:
+// host + version only, so the log proves the service started without
+// leaking credentials. If the watch reports Err 1 (shake timeout) and
+// this log is empty, the side service never started on the phone.
+function slog(...args) {
+  try {
+    console.log("[chess-watch]", ...args);
+  } catch (_) {}
+}
+
 async function handleRequest(req) {
   const method = req && req.method;
   const params = (req && req.params) || {};
+  slog("request", method);
   if (method === "PING") {
     return checkHealth(CONFIG);
   }
@@ -132,18 +146,23 @@ async function handleRequest(req) {
 
 AppSideService(
   BaseSideService({
-    onInit() {},
+    onInit() {
+      slog("side service init, host=" + hostOf(CONFIG.serverUrl) + " v" + APP_VERSION);
+    },
 
     async onRequest(req, res) {
       try {
         const data = await handleRequest(req);
         res(null, data);
       } catch (e) {
+        slog("request failed", req && req.method, e && e.code ? e.code : "unknown");
         res(e && e.code ? e : { code: "unknown", message: String(e) });
       }
     },
 
-    onRun() {},
+    onRun() {
+      slog("side service run");
+    },
     onDestroy() {},
   }),
 );

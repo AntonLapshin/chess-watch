@@ -89,6 +89,9 @@ function diagLines() {
     const short = { 1: "no link to phone", 2: "bluetooth lost", 4: "request timed out" }[_netError.code];
     lines.push(`Poll err: ${_netError.code} (try ${_netAttempts})`);
     lines.push(short || errorMessage(_netError.code, _netError.message).slice(0, 32));
+    // Err 1 = the BLE shake never answered: the side service is not
+    // running on the phone. Say what to do on the phone side.
+    if (Number(_netError.code) === 1) lines.push("Open Zepp app on phone");
   } else {
     lines.push("Poll err: none");
   }
@@ -128,7 +131,11 @@ function onState(state) {
   const prevPly = _lastPly;
   const prevCheck = _lastCheck;
   _state = state;
-  _netError = null;
+  // Only a REAL state clears the poll error. The offline fallback is
+  // delivered through this same callback, so clearing here wiped the
+  // failure the Diagnostics screen is supposed to show — the watch
+  // reported "Poll err: none" while the poll was failing with Err 1.
+  if (!state._offline) _netError = null;
   _lastPly = state.game.ply;
   _lastCheck = state.game.check;
   _selected = null;
@@ -334,6 +341,12 @@ Page(
         };
         if (_netError) {
           diagLine(`Err: ${_netError.code} (try ${_netAttempts})`);
+          // Err 1 = the BLE shake never answered: the side service is
+          // not running on the phone. Point at the phone, not the server.
+          if (Number(_netError.code) === 1) {
+            diagLine("No answer from phone:");
+            diagLine("open Zepp app, retry");
+          }
         }
         if (_diag && !_diag.error) {
           diagLine(`Side: ${_diag.shape}`);

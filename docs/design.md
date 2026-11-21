@@ -134,8 +134,33 @@ checker + knight mark (`scripts/gen-icons.mjs`).
    came from. `dist/*.zab` is gitignored: a build artifact embeds the real
    bearer + Access tokens and must never be committed (one was, in
    `c6346a3`, and was removed again here; it stays in that commit's history).
-7. **Tokens in `app.json`.** `appId` is `0` with a TODO comment — it must
-   be registered in console.zepp.com; no real appId is invented.
+9. **Side-service link verified against the official sample, not just
+   the docs.** The 0.1.1 build on a real Active 3 reported `Diag: side
+   unreachable`, Err 1 (ZML BLE shake timeout), `Poll err: none` — the
+   last line was a lie: `page/index.js` `onState()` cleared `_netError`
+   unconditionally, and the offline fallback is delivered through that
+   same callback, so the poll failure was wiped the moment the fake
+   board rendered. 0.1.2 only clears it for a real (`!_offline`) state.
+   The Err 1 itself was traced to the phone side, not the code:
+   `application/4.0/fetch-api` from `zepp-health/zeppos-samples` was
+   cloned and built with this repo's `zeus-cli` — same
+   `BaseSideService`/`BasePage` wiring, same `app.json` module mapping,
+   same bundled output shape (`AppSideService(BaseSideService(...))`,
+   `hmrpcv1` protocol), and the ZML transport in 0.0.38 (the sample's
+   pin) vs 0.0.43 (ours) is identical apart from minifier renames and
+   null-safe mixin calls. The preview `.zab` was unpacked and does
+   contain `app-side.zip` with the fixed code. So a shake timeout means
+   the side service is not running inside the Zepp app on the phone:
+   the only proof available is the Zepp app's own log screen
+   (Developer Mode: Profile → Settings → About → tap the Zepp icon
+   7× → Mini Program icon → Side Service tab). 0.1.2 therefore logs
+   `[chess-watch] side service init …` (host + version, no tokens) from
+   `app-side` `onInit`/`onRun` and each request method, the way the
+   sample logs `onRequest` — if that line never appears, the service
+   never started; if it appears and Err 1 persists, the Zepp-app
+   bridge is not answering. `app.json` `targets` uses the key `default`
+   where the sample uses `common`; the built `.zab` flattens the module
+   mapping, so the key does not reach the device and was left as-is.
 
 ## Verification items (plan §10) — status
 

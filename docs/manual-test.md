@@ -17,11 +17,22 @@ Two watches (Bip 6 + Active 3 Premium) + the server on the LAN/VPN host.
 
 ## Checklist
 
+- [ ] Install via `make preview` (keep the command running while the
+      Zepp app scans the QR code), then open Chess Watch on the watch.
+      Keep the Zepp app open on the phone — the side service runs inside
+      it, and the watch cannot reach the server without it.
 - [ ] First launch on each watch shows the player picker; the choice
       persists across restarts. Menu → Switch player returns to the picker.
 - [ ] Menu → Test link shows the Diagnostics overlay (build commit matches
       `git rev-parse HEAD`, names/host match `.env`); with the server up it
       reports `Ping: ok` and `Last: state ok`. Close returns to the board.
+- [ ] If Test link reports Err 1 / `Diag: side unreachable`, check the
+      phone before touching the server: Zepp app → Profile → Settings →
+      About → tap the Zepp icon 7× (Developer Mode) → Mini Program icon
+      → log screen → **Side Service** tab. The `[chess-watch] side
+      service init …` line must appear after opening the app on the
+      watch; an empty log means the side service never started.
+      Force-stop and reopen the Zepp app, then re-run Test link.
 - [ ] With the server stopped, the board still renders (offline dot) and
       Menu → Test link still opens, reporting `Ping: FAIL` and the last
       poll error — the diagnostics must not disappear with the board.
@@ -59,9 +70,11 @@ Two watches (Bip 6 + Active 3 Premium) + the server on the LAN/VPN host.
 
 ## Open verification items (not yet done on-device)
 
-- 0.1.1 build install: `zeus build` passes (0.1.1, all targets) with the
+- 0.1.2 build install: `zeus build` passes (0.1.2, all targets) with the
   registered `appId` 367819236781263. Install via `make preview` on both
   watches and read Menu → Test link first (see the README decision table).
+  For a shake timeout (Err 1) also read the Zepp app's Side Service log
+  screen — see the checklist above.
 - `fetch` response shape on the side service (`res.status` vs `res.body`
   only) — the client parses defensively, but on-device behaviour is
   unconfirmed until the Diagnostics screen is read.
