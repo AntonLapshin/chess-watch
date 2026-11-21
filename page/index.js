@@ -15,7 +15,7 @@ import { Controller } from "./controller.js";
 import { loadRole, saveRole, clearRole, loadHapticsEnabled, saveHapticsEnabled } from "../utils/storage.js";
 import { vibrate, setHapticsEnabled } from "../utils/haptics.js";
 import { pieceAt, parseFen } from "../shared/fen.js";
-import { targetsFor, isPromotionMove, errorMessage } from "../shared/protocol.js";
+import { targetsFor, isPromotionMove, errorMessage, positionChanged } from "../shared/protocol.js";
 
 let _widgets = [];
 let _layout = null;
@@ -143,6 +143,7 @@ function targets() {
 function onState(state) {
   const prevPly = _lastPly;
   const prevCheck = _lastCheck;
+  const prevState = _state;
   _state = state;
   // Only a REAL state clears the poll error. The offline fallback is
   // delivered through this same callback, so clearing here wiped the
@@ -151,8 +152,15 @@ function onState(state) {
   if (!state._offline) _netError = null;
   _lastPly = state.game.ply;
   _lastCheck = state.game.check;
-  _selected = null;
-  _pendingMove = false;
+  // Clear the selection (and a send in flight) only when the position
+  // actually changed. A long-poll returns the SAME state when its 20 s
+  // wait times out with no change, and clearing on that refresh dropped
+  // the selection mid-thought: a player who took >~10 s between tapping
+  // a piece and tapping its target found the tap only deselected.
+  if (positionChanged(prevState, state)) {
+    _selected = null;
+    _pendingMove = false;
+  }
   if (_controller) _controller.setRevision(state.revision);
   // Haptics: opponent moved, or we are now in check.
   if (state.game.ply > prevPly && prevPly >= 0 && state.game.ply > 0) vibrate();

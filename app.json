@@ -5,8 +5,8 @@
     "appName": "Chess Watch",
     "appType": "app",
     "version": {
-      "code": 6,
-      "name": "0.2.2"
+      "code": 7,
+      "name": "0.2.3"
     },
     "icon": "icon.png",
     "vender": "chess-watch",

@@ -60,6 +60,10 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
       a target square, and tap the selection frame — all three must work
       (0.2.2: every widget covering a square carries its own tap handler;
       Zepp does not bubble taps to the widget below).
+- [ ] Slow move (0.2.3): tap a piece, wait 25 s (past one 20 s poll
+      timeout — the dots must still be showing), then tap a target → the
+      move lands. Before 0.2.3 the poll timeout cleared the selection
+      mid-thought and the target tap only deselected.
 - [ ] Illegal taps do nothing (no dot, no send); tapping an empty square
       deselects.
 - [ ] Promotion: push a pawn to the last rank → picker (Q/R/B/N) → the

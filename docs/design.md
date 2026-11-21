@@ -93,6 +93,19 @@ every square centre has a tap path, and the old code fails 5 of its 6
 tests. The pending-move dim overlay deliberately has no handler (taps
 are ignored while a send is in flight anyway).
 
+Selection survives poll timeouts (0.2.3): `onState` used to clear the
+selection (`_selected = null`) on EVERY state delivery. A long-poll
+returns the same state when its 20 s wait times out with no change, so a
+player who took >~10 s between tapping a piece and tapping its target
+lost the selection mid-thought — the target tap then only deselected,
+and the move never happened, with no toast and no error anywhere. Now
+`onState` clears the selection (and a send in flight) only when the
+position actually changed — `shared/protocol.js` `positionChanged()`
+compares ply, FEN, game_no and status, so a poll-timeout refresh, a
+presence-only refresh, or an offer arriving leaves the selection alone,
+while a move, a restart, or a game-over clears it. The same guard also
+stops a poll timeout from clearing `_pendingMove` mid-send.
+
 ## Layout
 
 Physical pixels from `getDeviceInfo()`, no `designWidth` (the runner

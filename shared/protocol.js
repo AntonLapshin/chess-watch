@@ -63,6 +63,25 @@ export function isPromotionMove(legalMoves, from, to) {
   );
 }
 
+/** True when the game position changed between two states. A long-poll
+ *  returns the SAME state when its 20 s wait times out with no change, and
+ *  the page must not treat that refresh as a new position: clearing the
+ *  selection on it meant a deliberate player who took >~10 s between
+ *  tapping a piece and tapping its target lost the selection mid-thought
+ *  (the target tap then only deselected, and the move never happened).
+ *  Only a real change — a move (ply/fen), a restart (game_no), or a
+ *  status change (active -> finished) — invalidates the selection and a
+ *  send in flight. `prev` null (first state) counts as changed. */
+export function positionChanged(prev, next) {
+  if (!prev || !prev.game || !next || !next.game) return true;
+  return (
+    next.game.ply !== prev.game.ply ||
+    next.game.fen !== prev.game.fen ||
+    next.game_no !== prev.game_no ||
+    next.game.status !== prev.game.status
+  );
+}
+
 /** Client-side idempotency id: role + timestamp + counter. */
 let _counter = 0;
 export function nextClientId(role) {
