@@ -55,7 +55,11 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
 - [ ] Start position renders correctly on both shapes; Black's board is
       flipped (black pieces at the bottom on the Active 3).
 - [ ] Tap a piece → legal-target dots only; tap a target → the move lands
-      on both watches within ~1 s; last-move squares highlight.
+      on both watches within ~1 s; last-move squares highlight. Tap the
+      piece IMAGE itself (not the square edge), tap a DOT in the middle of
+      a target square, and tap the selection frame — all three must work
+      (0.2.2: every widget covering a square carries its own tap handler;
+      Zepp does not bubble taps to the widget below).
 - [ ] Illegal taps do nothing (no dot, no send); tapping an empty square
       deselects.
 - [ ] Promotion: push a pawn to the last rank → picker (Q/R/B/N) → the

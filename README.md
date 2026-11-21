@@ -131,15 +131,16 @@ still the placeholders).
 ## Verification status (2026-11-21)
 
 Verified: worker unit tests 68/68, integration tests 4/4 (real workerd +
-SQLite), JS vitest 29/29 (incl. 4 controller timeout tests), `vite build`
-pass, `zeus build` pass (0.2.1, all 4 targets), headless-Chromium
-screenshots of both presets, a browser tap e2→e4 reaching the local
-Worker (ply 1, turn b), preset switching Bip 6 ↔ Active 3 (board
-re-renders both ways), and Menu → Test link opening the Diagnostics
-overlay on both presets, including with the Worker down. The deployed
-Worker is healthy (`/api/v1/health` → `{"status":"ok","version":"0.2.0"}`)
-and the tunnel/DNS cutover is done.
+SQLite), JS vitest 35/35 (incl. 4 controller timeout tests and 6 board
+tap tests — the topmost widget at every square centre has a tap path),
+`vite build` pass, `zeus build` pass (0.2.2, all 4 targets),
+headless-Chromium screenshots of both presets, a browser tap e2→e4
+reaching the local Worker (ply 1, turn b), preset switching Bip 6 ↔
+Active 3 (board re-renders both ways), and Menu → Test link opening the
+Diagnostics overlay on both presets, including with the Worker down. The
+deployed Worker is healthy (`/api/v1/health` →
+`{"status":"ok","version":"0.2.0"}`) and the tunnel/DNS cutover is done.
 
-Not yet verified on-device: the 0.2.1 build has not been installed on
+Not yet verified on-device: the 0.2.2 build has not been installed on
 either watch yet (see `docs/manual-test.md`). Also unconfirmed: Vibrator
 availability, console icon acceptance.

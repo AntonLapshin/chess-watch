@@ -76,6 +76,23 @@ overlay shows the live game state (`Turn:`, `Ply:`, `Status:`, `Legal:`,
 from a move-submit problem; the panel uses a tighter 22 px line step so
 all 14 lines still fit the 450 px Bip 6 display.
 
+Board taps (0.2.2): Zepp widgets do NOT bubble — the topmost widget at
+the tap point gets the event and nothing falls through to the widget
+below. The board was built as 64 FILL_RECT cells with `click_func`, with
+the piece IMG created after (on top of) each cell: the IMG covers ~90%
+of its cell (38/42 px on Bip 6, 37/41 px on Active 3), so tapping a piece
+hit the handler-less image and `onSquare()` never ran — \"can't select a
+piece\" on-device, while the same code worked in the web harness, whose
+DOM cell `onClick` fires through the `<img>`. The legal-move dots (14 px,
+centred on target squares) and the selection frame swallowed taps the
+same way. Rule, now in `page/board.js`: every widget covering a square
+carries the tap itself — pieces via `addEventListener(CLICK_DOWN)` (the
+pattern dragon-army proves on-device for IMG taps), dots and frame via
+`click_func`. `page/board.test.mjs` asserts it: the topmost widget at
+every square centre has a tap path, and the old code fails 5 of its 6
+tests. The pending-move dim overlay deliberately has no handler (taps
+are ignored while a send is in flight anyway).
+
 ## Layout
 
 Physical pixels from `getDeviceInfo()`, no `designWidth` (the runner

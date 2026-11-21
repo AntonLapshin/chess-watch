@@ -1,5 +1,17 @@
 // Board: 64 FILL_RECT cells (each clickable), pieces as IMG, dots,
 // selection frame, last-move tint, check tint.
+//
+// Zepp tap rule — every widget that covers a square must carry the tap
+// handler itself: the topmost widget at the tap point gets the event and
+// nothing bubbles to the widget below (unlike the DOM, where the web
+// harness's cell onClick fires through the <img>). The piece IMG covers
+// ~90% of its cell (38/42 px on Bip 6, 37/41 px on Active 3), so a piece
+// without a handler made its whole square untappable — taps on pieces
+// did nothing on-device while the same code worked in the browser. The
+// legal-move dots (14 px, centred on target squares) and the selection
+// frame swallow taps the same way, so they carry it too. The pending-move
+// dim overlay deliberately has none: taps are ignored while a send is in
+// flight anyway (see page/index.js _pendingMove).
 import { parseFen } from "../shared/fen.js";
 import { squareRect } from "./layout.js";
 import { THEME } from "./theme.js";
@@ -30,17 +42,20 @@ export function renderBoard(hmUI, widgets, opts) {
         click_func: () => onSquare(uci),
       });
       widgets.push(cellWidget);
-      // Piece image (centred in the cell).
+      // Piece image (centred in the cell). It sits ON TOP of the cell
+      // rect, so it needs its own handler — without one the tap dies here
+      // and onSquare() never runs. addEventListener(CLICK_DOWN) is the
+      // pattern proven on-device (dragon-army uses it for IMG taps).
       const pieceObj = board[7 - rankIdx][file];
       if (pieceObj) {
         const src = `pieces/${layout.shape}/${pieceObj.color}${pieceObj.type}.png`;
-        widgets.push(
-          hmUI.createWidget(hmUI.widget.IMG, {
-            x: rect.x + Math.floor((cell - piece) / 2),
-            y: rect.y + Math.floor((cell - piece) / 2),
-            w: piece, h: piece, src,
-          }),
-        );
+        const pieceWidget = hmUI.createWidget(hmUI.widget.IMG, {
+          x: rect.x + Math.floor((cell - piece) / 2),
+          y: rect.y + Math.floor((cell - piece) / 2),
+          w: piece, h: piece, src,
+        });
+        pieceWidget.addEventListener(hmUI.event.CLICK_DOWN, () => onSquare(uci));
+        widgets.push(pieceWidget);
       }
     }
   }
@@ -57,12 +72,15 @@ export function renderBoard(hmUI, widgets, opts) {
     ];
     for (const f of frame) {
       widgets.push(
-        hmUI.createWidget(hmUI.widget.FILL_RECT, { ...f, color: THEME.selection }),
+        hmUI.createWidget(hmUI.widget.FILL_RECT, {
+          ...f, color: THEME.selection, click_func: () => onSquare(selected),
+        }),
       );
     }
   }
 
-  // Legal-move dots on target squares.
+  // Legal-move dots on target squares. A dot sits on top of its cell, so
+  // it needs its own handler — tapping the dot IS tapping the square.
   for (const target of targets || []) {
     const r = squareRect(layout, fileOf(target), rankIdxOf(target), flipped);
     const d = 14;
@@ -71,6 +89,7 @@ export function renderBoard(hmUI, widgets, opts) {
         x: r.x + Math.floor((cell - d) / 2),
         y: r.y + Math.floor((cell - d) / 2),
         w: d, h: d, radius: 7, color: THEME.legalDot,
+        click_func: () => onSquare(target),
       }),
     );
   }
