@@ -25,12 +25,16 @@ source of truth; the watches are thin tap-to-move clients.
 4. `make server` — start the relay (single worker) on port 8787.
 5. `make config` — generate `shared/config.generated.js` from `.env`.
 6. `make web` — test in the browser (`?player=p1` / `?player=p2` tabs).
+   It re-runs `make config` first, so `.env` edits are picked up.
 7. `make preview` — scan the QR with the Zepp app on each watch, enable
    developer mode.
 
 `make setup` does the installs and copies the `.env.example` files the
-first time. `make test` runs the JS vitest suite and the server pytest
-suite. `make pieces` / `make icons` regenerate the PNG assets.
+first time. On Arch/Omarchy, where `libvips` is installed system-wide,
+setup sets `SHARP_IGNORE_GLOBAL_LIBVIPS=1` so `sharp` uses its bundled
+prebuilt binary instead of trying (and failing) to compile against the
+system library. `make test` runs the JS vitest suite and the server
+pytest suite. `make pieces` / `make icons` regenerate the PNG assets.
 
 ## Repo layout
 

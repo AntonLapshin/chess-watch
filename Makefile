@@ -3,7 +3,7 @@
 
 help:
 	@echo "Targets:"
-	@echo "  make setup    npm install + server venv + copy .env.example"
+	@echo "  make setup    npm install (root + web) + server venv + copy .env.example"
 	@echo "  make config   generate shared/config.generated.js from .env"
 	@echo "  make pieces   generate piece PNGs"
 	@echo "  make icons    generate app icons"
@@ -14,10 +14,13 @@ help:
 	@echo "  make test     vitest (JS) + server pytest"
 
 setup:
-	npm install
-	$(MAKE) -C server venv
 	cp -n .env.example .env || true
 	cp -n server/.env.example server/.env || true
+	# Arch/Omarchy ship libvips; sharp otherwise tries to compile against it
+	# and fails without node-addon-api. Force its bundled prebuilt binary.
+	SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm install
+	npm install --prefix web
+	$(MAKE) -C server venv
 	@echo "setup done — fill in .env and server/.env, then: make config"
 
 config:
@@ -29,7 +32,7 @@ pieces:
 icons:
 	node scripts/gen-icons.mjs
 
-web:
+web: config
 	npm run dev --prefix web
 
 build:
