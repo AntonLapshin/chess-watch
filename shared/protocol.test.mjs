@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fakeInitialState, errorMessage, positionChanged } from "./protocol.js";
+import { fakeInitialState, errorMessage, positionChanged, optimisticState } from "./protocol.js";
 
 describe("fakeInitialState", () => {
   it("uses built-in defaults without names", () => {
@@ -72,5 +72,52 @@ describe("positionChanged", () => {
   it("no previous state counts as changed", () => {
     expect(positionChanged(null, start())).toBe(true);
     expect(positionChanged(undefined, start())).toBe(true);
+  });
+});
+
+describe("optimisticState", () => {
+  const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+  function startState() {
+    const s = fakeInitialState("p1");
+    delete s._offline;
+    s.game.legal_moves = ["e2e3", "e2e4", "g1f3"];
+    return s;
+  }
+
+  it("applies the move locally: FEN, turn, ply, last move; clears legal moves", () => {
+    const next = optimisticState(startState(), "e2", "e4", null);
+    expect(next).not.toBeNull();
+    // Byte-identical to the server's chess.js FEN for the same move.
+    expect(next.game.fen).toBe("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1");
+    expect(next.game.turn).toBe("b");
+    expect(next.game.ply).toBe(1);
+    expect(next.game.last_move).toEqual({ from: "e2", to: "e4", san: null, by: "p1" });
+    expect(next.game.legal_moves).toEqual([]);
+    expect(next.game.check).toBe(false);
+    expect(next.revision).toBe(0); // revision only moves when the server answers
+    // The original state is untouched.
+    expect(startState().game.fen).toBe(START_FEN);
+  });
+
+  it("the confirming server state matches the optimistic one (no jump)", () => {
+    const opt = optimisticState(startState(), "e2", "e4", null);
+    const confirmed = startState();
+    confirmed.game.fen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
+    confirmed.game.turn = "b";
+    confirmed.game.ply = 1;
+    expect(positionChanged(opt, confirmed)).toBe(false);
+  });
+
+  it("handles promotion", () => {
+    const s = startState();
+    s.game.fen = "8/P7/8/8/8/8/k6K/8 w - - 0 1";
+    const next = optimisticState(s, "a7", "a8", "q");
+    expect(next.game.fen).toBe("Q7/8/8/8/8/8/k6K/8 b - - 0 1");
+  });
+
+  it("returns null for a move that cannot be applied locally", () => {
+    expect(optimisticState(startState(), "e3", "e4", null)).toBeNull(); // no piece
+    expect(optimisticState(startState(), "e7", "e5", null)).toBeNull(); // not our turn
+    expect(optimisticState({ game: {} }, "e2", "e4", null)).toBeNull();
   });
 });

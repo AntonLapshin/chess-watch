@@ -123,6 +123,25 @@ register a tap path): against the 0.2.3 code they fail 5 tests. The same
 defect also hid in the overlay backdrop (tapping outside a panel never
 closed it) — it uses `addEventListener` now too.
 
+Optimistic moves (0.2.5): tapping a dot used to dim the whole board
+until the server answered — about a second of black screen per move.
+`doMove` now applies the tap to the displayed board immediately
+(`shared/protocol.js` `optimisticState`, built on `shared/fen.js`
+`applyMoveToFen`): the piece moves at once, the status flips to the
+opponent, and the confirming server state lands on the same position.
+The FEN applier is display-only (the server still enforces the rules)
+and is verified byte-for-byte against the server's chess.js, including
+castling, en passant, promotion, and the en-passant-square convention
+(chess.js only records the square when an enemy pawn can capture it).
+`check` is left false and `legal_moves` empty — both unknown locally,
+corrected by the server on arrival. If the send fails, `doMove` rolls
+the board back to the pre-move state and shows a toast; a revision
+conflict also triggers a refresh, whose poll delivers the fresh state.
+The dim overlay is gone entirely. One side effect worth knowing: the
+confirming state no longer buzzes as "the opponent moved" — `doMove`
+advances `_lastPly` with the optimistic move, so the haptic only fires
+for the opponent's moves and for entering check.
+
 ## Layout
 
 Physical pixels from `getDeviceInfo()`, no `designWidth` (the runner
@@ -146,6 +165,15 @@ piece 37. Status bar and 160×40 Menu button per `page/layout.js`.
   a 200-ply replay + legal moves costs ~22–38 ms (measured in workerd and Node respectively), over the Workers Free
   10 ms CPU/invocation cap; a FEN load is ~1 ms. Replay is used only for
   takeback (truncated history) and restart.
+- Derived position data is cached per revision (0.2.1): legal-move
+  generation is the expensive part of a state payload, and a long-poll
+  returns the same position dozens of times between moves. `buildState`
+  now reads check / check-square / side-to-move legal moves from
+  `_derived()`, keyed by the revision — every mutation bumps it, so the
+  cache can never serve a stale position. Presence and `server_time`
+  stay per-request (they change without a revision bump). The health
+  endpoint reports the same `VERSION` constant as the DO (single source
+  of truth in `game-do.js`, imported by `index.js`).
 - Repetition comes from the persisted map (trimmed FEN — first 4 fields —
   → count): chess.js 1.4.0 has no `isFivefoldRepetition` /
   `isSeventyFiveMoveRule`, and after `load(fen)` its history is empty so

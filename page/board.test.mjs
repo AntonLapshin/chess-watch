@@ -73,7 +73,7 @@ describe("renderBoard taps", () => {
     const seen = [];
     renderBoard(hmUI, [], {
       layout: LAYOUTS.s, state: makeState(),
-      selected: null, targets: [], pendingMove: false,
+      selected: null, targets: [],
       onSquare: (uci) => seen.push(uci),
     });
     // e2 pawn IMG: the topmost widget at the centre of e2.
@@ -89,7 +89,7 @@ describe("renderBoard taps", () => {
     const seen = [];
     renderBoard(hmUI, [], {
       layout: LAYOUTS.s, state: makeState(),
-      selected: null, targets: [], pendingMove: false,
+      selected: null, targets: [],
       onSquare: (uci) => seen.push(uci),
     });
     const c = squareCentre(LAYOUTS.s, 4, 3); // e4, empty
@@ -104,7 +104,7 @@ describe("renderBoard taps", () => {
     const seen = [];
     renderBoard(hmUI, [], {
       layout: LAYOUTS.s, state: makeState(),
-      selected: "e2", targets: ["e4"], pendingMove: false,
+      selected: "e2", targets: ["e4"],
       onSquare: (uci) => seen.push(uci),
     });
     const c = squareCentre(LAYOUTS.s, 4, 3); // e4 dot
@@ -119,7 +119,7 @@ describe("renderBoard taps", () => {
     const seen = [];
     renderBoard(hmUI, [], {
       layout: LAYOUTS.s, state: makeState(),
-      selected: "e2", targets: [], pendingMove: false,
+      selected: "e2", targets: [],
       onSquare: (uci) => seen.push(uci),
     });
     // Top edge of the e2 frame: square e2 starts at (195, 298), so the
@@ -142,7 +142,7 @@ describe("renderBoard taps", () => {
     });
     renderBoard(hmUI, [], {
       layout: LAYOUTS.s, state: blackState,
-      selected: null, targets: [], pendingMove: false,
+      selected: null, targets: [],
       onSquare: (uci) => seen.push(uci),
     });
     const c = squareCentre(LAYOUTS.s, 4, 6, true); // e7, flipped
@@ -156,7 +156,7 @@ describe("renderBoard taps", () => {
     const hmUI = stubHmUI();
     renderBoard(hmUI, [], {
       layout: LAYOUTS.s, state: makeState(),
-      selected: "e2", targets: ["e4"], pendingMove: false,
+      selected: "e2", targets: ["e4"],
       onSquare: () => {},
     });
     for (let file = 0; file < 8; file++) {

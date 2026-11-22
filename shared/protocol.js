@@ -1,5 +1,6 @@
 // Shared protocol constants and small pure helpers (no Zepp imports, so
 // both the watch page and the web harness can use them).
+import { applyMoveToFen } from "./fen.js";
 export const ACTION_TYPES = [
   "offer_restart", "offer_takeback", "offer_draw",
   "accept", "decline", "resign", "claim_draw",
@@ -80,6 +81,33 @@ export function positionChanged(prev, next) {
     next.game_no !== prev.game_no ||
     next.game.status !== prev.game.status
   );
+}
+
+/** Optimistic move: apply a tap to the displayed board immediately so
+ *  the piece visibly moves the moment it is tapped, instead of the board
+ *  going dark for the ~1 s BLE + Worker round-trip. The FEN applier is
+ *  byte-identical to the server's chess.js FEN (verified against it in
+ *  fen.test.mjs / the chess.js oracle), so the confirming state lands on
+ *  the same position with no jump. check is left false and legal_moves
+ *  empty — both are unknown locally and the server corrects them on
+ *  arrival. Returns null when the move cannot be applied locally
+ *  (malformed state); the caller then falls back to waiting for the
+ *  server. */
+export function optimisticState(state, from, to, promotion) {
+  try {
+    const fen = applyMoveToFen(state.game.fen, from, to, promotion);
+    if (!fen) return null;
+    const next = JSON.parse(JSON.stringify(state));
+    next.game.fen = fen;
+    next.game.turn = state.game.turn === "w" ? "b" : "w";
+    next.game.ply = state.game.ply + 1;
+    next.game.last_move = { from, to, san: null, by: state.you.role };
+    next.game.check = false;
+    next.game.legal_moves = [];
+    return next;
+  } catch (_) {
+    return null;
+  }
 }
 
 /** Client-side idempotency id: role + timestamp + counter. */

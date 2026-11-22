@@ -19,7 +19,7 @@ login step. A bad or missing token gets `401 {"code": "unauthorized"}`.
 
 ### `GET /api/v1/health`
 
-Liveness, no auth. Returns `{"status": "ok", "version": "0.2.0"}`. If the
+Liveness, no auth. Returns `{"status": "ok", "version": "0.2.1"}`. If the
 Worker secrets are missing, equal, shorter than 24 chars, or still the
 placeholders, every `/api/v1/*` request (including health) fails with
 `500 {"code": "config_error"}` instead.

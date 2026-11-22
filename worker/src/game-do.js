@@ -37,7 +37,7 @@ import {
 } from "./rules.js";
 import * as store from "./store.js";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.2.1";
 const ONLINE_WINDOW_S = 45;
 const SQUARE_RE = /^[a-h][1-8]$/;
 
@@ -65,8 +65,30 @@ export class ChessGame {
     this.sql = ctx.storage.sql;
     this.game = null; // parsed in-memory state (see ensureLoaded)
     this.board = null; // cached Chess instance, kept in sync with game
+    this.derived = null; // per-revision derived position data (see _derived)
     this.waiters = []; // { since, resolve, timer }
     this.presence = {}; // role -> last-seen epoch seconds
+  }
+
+  // Derived position data, cached per revision: legal-move generation is
+  // the expensive part of a state payload, and a long-poll returns the
+  // same position dozens of times between moves. The cache key is the
+  // revision, which every mutation bumps, so it can never serve a stale
+  // position. Presence and server_time stay per-request — they change
+  // without a revision bump, so they are not cached.
+  _derived() {
+    const g = this.game;
+    if (this.derived && this.derived.revision === g.revision) return this.derived;
+    const board = this.board;
+    const check = g.status === "active" && board.isCheck();
+    this.derived = {
+      revision: g.revision,
+      check,
+      checkSquare: check ? kingSquare(board) : null,
+      turn: board.turn(),
+      legal: g.status === "active" ? legalMovesUci(board) : [],
+    };
+    return this.derived;
   }
 
   // -- config -------------------------------------------------------------
@@ -197,8 +219,9 @@ export class ChessGame {
     const youColor = this.roleColor(role);
     const oppRole = this.opponentRole(role);
     const oppSeen = this.presence[oppRole] || 0;
-    const check = g.status === "active" && board.isCheck();
-    const checkSquare = check ? kingSquare(board) : null;
+    const d = this._derived();
+    const check = d.check;
+    const checkSquare = d.checkSquare;
     // ply numbering matches the old server: index within the last-6 window
     // + 1 (clients only display `san`, see page/overlays.js).
     const recent = moves.slice(-6).map((m, i) => ({ ply: i + 1, san: m.san, by: m.by }));
@@ -208,8 +231,8 @@ export class ChessGame {
       last = { from: m.uci.slice(0, 2), to: m.uci.slice(2, 4), san: m.san, by: m.by };
     }
     let legal = [];
-    if (g.status === "active" && board.turn() === youColor) {
-      legal = legalMovesUci(board);
+    if (g.status === "active" && d.turn === youColor) {
+      legal = d.legal;
     }
     return {
       revision: g.revision,

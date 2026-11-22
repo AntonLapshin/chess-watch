@@ -16,9 +16,14 @@
 // The legal-move dots (14 px, centred on target squares) and the
 // selection frame swallow taps the same way, so they carry it too.
 // addEventListener(CLICK_DOWN) is the pattern proven on-device for
-// FILL_RECT and IMG alike (dragon-army uses it for both). The
-// pending-move dim overlay deliberately has none: taps are ignored while
-// a send is in flight anyway (see page/index.js _pendingMove).
+// FILL_RECT and IMG alike (dragon-army uses it for both).
+//
+// No dim overlay while a move is in flight: 0.2.4 dimmed the whole board
+// until the server answered, which read as a ~1 s black screen after
+// every tap. The move is now optimistic (page/index.js applies it to
+// the displayed board the moment it is tapped), so the board already
+// shows the new position while the send is in flight; taps are still
+// ignored meanwhile (see page/index.js _pendingMove).
 import { parseFen } from "../shared/fen.js";
 import { squareRect } from "./layout.js";
 import { THEME } from "./theme.js";
@@ -27,10 +32,10 @@ function fileOf(uci) { return uci.charCodeAt(0) - 97; }
 function rankIdxOf(uci) { return Number(uci[1]) - 1; }
 
 export function renderBoard(hmUI, widgets, opts) {
-  const { layout, state, selected, targets, pendingMove, onSquare } = opts;
+  const { layout, state, selected, targets, onSquare } = opts;
   const flipped = state.you.color === "b";
   const board = parseFen(state.game.fen);
-  const { x: bx, y: by, cell, piece } = layout.board;
+  const { cell, piece } = layout.board;
   const lastMove = state.game.last_move;
   const checkSq = state.game.check ? state.game.check_square : null;
 
@@ -102,13 +107,4 @@ export function renderBoard(hmUI, widgets, opts) {
     widgets.push(dotWidget);
   }
 
-  // Pending-move pulse: dim the board while a send is in flight.
-  if (pendingMove) {
-    widgets.push(
-      hmUI.createWidget(hmUI.widget.FILL_RECT, {
-        x: bx, y: by, w: layout.board.size, h: layout.board.size,
-        color: 0x660e1116,
-      }),
-    );
-  }
 }

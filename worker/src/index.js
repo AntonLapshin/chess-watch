@@ -7,7 +7,7 @@
 // config_error (there is no deploy-time startup to refuse in, so the
 // failure surfaces on first request instead). Names are Worker vars
 // CHESS_P1_NAME / CHESS_P2_NAME (defaults Aurora / Sam).
-import { ChessGame } from "./game-do.js";
+import { ChessGame, VERSION } from "./game-do.js";
 
 export { ChessGame };
 
@@ -94,7 +94,7 @@ export default {
       if (configError) {
         return jsonResponse({ code: "config_error", message: configError }, 500, cors);
       }
-      return jsonResponse({ status: "ok", version: "0.2.0" }, 200, cors);
+      return jsonResponse({ status: "ok", version: VERSION }, 200, cors);
     }
     if (!url.pathname.startsWith("/api/v1/")) {
       return jsonResponse({ code: "not_found", message: "unknown endpoint" }, 404, cors);

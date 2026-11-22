@@ -77,7 +77,10 @@ against it.
   visible; do not "fix" it by moving the wait into `blockConcurrencyWhile`.
 - CPU: 10 ms/invocation on Free — this is why the per-request path never
   replays moves (see above). A single move + legal-moves computation is
-  ~1–3 ms.
+  ~1–3 ms. Since 0.2.1 the derived position data (check, check-square,
+  side-to-move legal moves) is cached per revision, so a long-poll that
+  returns the same position does no move generation at all — only moves
+  and other mutations recompute it.
 - DO SQLite: 10 GB total; this game is kilobytes.
 
 ## Setup
@@ -142,7 +145,7 @@ Pages → chess-watch → Settings → Variables → add `CHESS_P1_NAME` /
 Dashboard half of the deploy (dash.cloudflare.com; also summarized in
 the root README): the custom domain must be a Cloudflare zone (DNS
 managed by Cloudflare). After deploying, check Workers & Pages →
-chess-watch for the deployment and version 0.2.0. Settings → Variables
+chess-watch for the deployment and version 0.2.1. Settings → Variables
 → Secrets is the dashboard alternative to `make worker-secrets`;
 Settings → Triggers → Routes is the alternative to the `--route` the
 deploy script passes (add the route there if you deploy without it).
@@ -159,7 +162,7 @@ revision 0, so finish or abandon any in-progress laptop game first):
 
 1. Deploy the Worker and verify it on the workers.dev URL first
    (`curl https://<name>.<subdomain>.workers.dev/api/v1/health` →
-   `{"status":"ok","version":"0.2.0"}`), then on the custom-domain URL
+   `{"status":"ok","version":"0.2.1"}`), then on the custom-domain URL
    from `.env` after the route attaches.
 2. In the Cloudflare dashboard → DNS, delete the tunnel CNAME for the
    custom domain (the Worker route replaces it; if the CNAME still
@@ -174,7 +177,7 @@ revision 0, so finish or abandon any in-progress laptop game first):
 5. Delete the old server leftovers on the laptop: `server/.venv` and
    `data/` (`server/` itself is already gone from this repo).
 6. Rebuild both watches (`make config && make build`) — the bundle no
-   longer carries Access headers, and the version is 0.2.0.
+   longer carries Access headers, and the version is 0.2.1.
 
 ## Tests
 

@@ -43,6 +43,41 @@ describe("state", () => {
   });
 });
 
+describe("derived state cache", () => {
+  it("same revision returns identical derived data, and a move refreshes it", async () => {
+    const { game } = makeGame();
+    const a = await state(game, "p1");
+    const b = await state(game, "p1");
+    expect(b.game.legal_moves).toEqual(a.game.legal_moves);
+    expect(b.game.fen).toBe(a.game.fen);
+    expect(b.game.check).toBe(a.game.check);
+    expect(a.game.legal_moves.length).toBe(20);
+    // Play e2-e4: the cache must not serve the start position's moves.
+    const after = await play(game, "p1", 0, "e2e4", "c1");
+    expect(after.game.legal_moves).toEqual([]); // not p1's turn
+    const black = await state(game, "p2");
+    expect(black.game.legal_moves).toContain("e7e5");
+    expect(black.game.legal_moves).not.toContain("e2e4");
+    expect(black.game.check).toBe(false);
+    expect(black.game.fen).toBe(after.game.fen);
+  });
+
+  it("check is detected after a cached state", async () => {
+    const { game } = makeGame();
+    // 1.e4 e5 2.Qh5 Nc6 3.Qxe5+: the black king is in check and the game
+    // is still active. (After an actual mate, check reads false: it is
+    // only reported while the game is active — pre-existing rule.)
+    let s = await play(game, "p1", 0, "e2e4", "k1");
+    s = await play(game, "p2", s.revision, "e7e5", "k2");
+    s = await play(game, "p1", s.revision, "d1h5", "k3");
+    s = await play(game, "p2", s.revision, "b8c6", "k4");
+    s = await play(game, "p1", s.revision, "h5e5", "k5");
+    expect(s.game.status).toBe("active");
+    expect(s.game.check).toBe(true);
+    expect(s.game.check_square).toBe("e8");
+  });
+});
+
 describe("moves", () => {
   it("wrong turn", async () => {
     const { game } = makeGame();

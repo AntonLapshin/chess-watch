@@ -70,6 +70,12 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
       nothing on-device (`click_func` is ignored on FILL_RECT — only
       BUTTON honours it; board taps use `addEventListener(CLICK_DOWN)`).
       Also: open the menu, tap outside the panel → it closes.
+- [ ] Optimistic move (0.2.5): tap a piece, then tap a DOT → the piece
+      moves AT ONCE (the status flips to "Opponent's turn" immediately)
+      and the board never goes dark. Before 0.2.5 the board dimmed for
+      the ~1 s BLE + Worker round-trip. If the move is rejected (e.g.
+      airplane mode mid-send), the board rolls back to the old position
+      and a toast explains why — tap again after reconnecting.
 - [ ] Illegal taps do nothing (no dot, no send); tapping an empty square
       deselects.
 - [ ] Promotion: push a pawn to the last rank → picker (Q/R/B/N) → the
@@ -98,38 +104,43 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
 
 ## Open verification items (not yet done on-device)
 
-- 0.2.1 build install: `zeus build` passes (0.2.1, all targets) with the
+- 0.2.5 build install: `zeus build` passes (0.2.5, all targets) with the
   registered `appId` 1137599. Install via `make preview` on both
   watches and read Menu → Test link first (see the README decision table).
   For a shake timeout (Err 1) also read the Zepp app's Side Service log
-  screen — see the checklist above. The 0.2.0 build is already installed
-  on both watches and the Worker is deployed and healthy; 0.2.1 fixes the
-  board names (deploy with `make worker-deploy` first) and adds page-side
-  request timeouts plus the game-state lines in Diagnostics.
+  screen — see the checklist above. The 0.2.4 build is already installed
+  on both watches and confirmed working on-device; 0.2.5 is optimistic
+  moves (no more black screen after a tap) and the Worker 0.2.1 is the
+  per-revision derived-state cache — deploy the Worker with
+  `make worker-deploy` first so the health check reads 0.2.1.
 - `fetch` response shape on the side service (`res.status` vs `res.body`
   only) — the client parses defensively, but on-device behaviour is
   unconfirmed until the Diagnostics screen is read.
 - Vibrator availability on both models.
 - Console icon acceptance (192×192 PNGs provided).
 - Production cutover: done 2026-11-21 — the Worker is deployed (route on
-  the custom domain, `/api/v1/health` → `{"status":"ok","version":"0.2.0"}`),
+  the custom domain, `/api/v1/health` → `{"status":"ok","version":"0.2.1"}`),
   the tunnel is wiped and its DNS deleted. The checklist in
   `worker/README.md` § "Deploy + cutover" is now a record, not a todo.
 
 ## Already verified (browser + Worker, 2026-11-21)
 
-- Worker unit tests: 68 tests green (rules, DO API/actions, Worker entry).
+- Worker unit tests: 70 tests green (rules, DO API/actions, Worker entry,
+  derived-state cache).
 - Worker integration tests: 4 tests green through real workerd + SQLite
   (health, state, full flow with long-poll wake + offer + resign,
   duplicate id).
 - Smoke: health, auth, move, long-poll wake, dedupe, 409 conflict,
   resign — all pass against a local dev server (see below).
-- JS vitest: 29 tests green (FEN parsing, both layouts, round corner radius,
-  HTTP bearer headers, controller request timeouts).
+- JS vitest: 57 tests green (FEN parsing + move application, both layouts,
+  round corner radius, HTTP bearer headers, controller request timeouts,
+  board/overlay tap paths, position changes, optimistic moves).
 - Web harness: `vite build` passes; headless-Chromium screenshots of both
   presets show the correct start position; tap e2→e4 in the browser reached
   the local Worker (ply 1, turn b); selection dots and last-move highlight
-  verified visually.
+  verified visually; optimistic move verified with a 2.5 s delayed move
+  response (the pawn is on e4 while the server still says ply 0, no dim
+  overlay) and a forced 409 (the board rolls back and a toast appears).
 
 ## Worker smoke (local dev server)
 
@@ -138,7 +149,7 @@ cd worker && cp .dev.vars.example .dev.vars   # fill in test tokens
 npm run dev &                                 # http://localhost:8787
 P1=<token-p1>; P2=<token-p2>
 curl -s http://localhost:8787/api/v1/health
-# -> {"status":"ok","version":"0.2.0"}
+# -> {"status":"ok","version":"0.2.1"}
 curl -s -H "Authorization: Bearer $P1" "http://localhost:8787/api/v1/state?since=-1"
 curl -s -X POST -H "Authorization: Bearer $P1" -H "Content-Type: application/json" \
   -d '{"client_move_id":"smoke-1","expected_revision":0,"from":"e2","to":"e4"}' \

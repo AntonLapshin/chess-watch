@@ -10,6 +10,21 @@ draw agreement. "Start over" and "move back" need opponent confirmation;
 resign is immediate. Browser development through `zepp-web-runner`
 (`make web`).
 
+## Screenshots
+
+From the web harness (`make web`, local Worker) — the same
+`page/index.js` that runs on the watch.
+
+| Bip 6 — start | Bip 6 — piece selected |
+|---|---|
+| ![Bip 6 start position](docs/screenshots/bip6-start.png) | ![Bip 6 with e2 selected, dots on e3/e4](docs/screenshots/bip6-dots.png) |
+| Active 3 — mid-game (flipped) | Bip 6 — Diagnostics |
+| ![Active 3 after 1.e4 e5, flipped board](docs/screenshots/active3-midgame.png) | ![Bip 6 Diagnostics overlay](docs/screenshots/bip6-diag.png) |
+
+Moves are optimistic: tapping a dot moves the piece at once, and the
+board never goes dark while the send is in flight (see
+`docs/design.md`).
+
 ## Quick start
 
 1. `make setup` — installs root + web + worker, copies `.env.example` →
@@ -54,7 +69,7 @@ in `worker/README.md` § Deploy + cutover):
   managed by Cloudflare). `make worker-login` authorizes wrangler; check
   it with `cd worker && npx wrangler whoami`.
 - **Workers & Pages → chess-watch:** after `make worker-deploy`, check
-  the deployment is listed and the version is 0.2.0. Settings →
+  the deployment is listed and the version is 0.2.1. Settings →
   Variables → Secrets shows `CHESS_TOKEN_P1` / `CHESS_TOKEN_P2`
   (the dashboard alternative to `make worker-secrets`); Settings →
   Variables (plain Variables, not Secrets) holds `CHESS_P1_NAME` /
@@ -73,7 +88,7 @@ in `worker/README.md` § Deploy + cutover):
   service token; on the laptop, stop/disable `cloudflared-chess-watch`
   and delete the tunnel.
 - **Verify:** `curl $CHESS_SERVER_URL/api/v1/health` →
-  `{"status":"ok","version":"0.2.0"}` (also check the workers.dev URL
+  `{"status":"ok","version":"0.2.1"}` (also check the workers.dev URL
   first, before the route attaches).
 
 ## Repo layout
@@ -130,21 +145,27 @@ still the placeholders).
 
 ## Verification status (2026-11-21)
 
-Verified: worker unit tests 68/68, integration tests 4/4 (real workerd +
-SQLite), JS vitest 43/43 (incl. 4 controller timeout tests, 6 board tap
+Verified: worker unit tests 70/70, integration tests 4/4 (real workerd +
+SQLite), JS vitest 57/57 (incl. 4 controller timeout tests, 6 board tap
 tests — the topmost widget at every square centre has a tap path — 5
-`positionChanged` tests, and 3 overlay tests incl. the backdrop tap),
-`vite build` pass, `zeus build` pass (0.2.4, all 4 targets),
-headless-Chromium screenshots of both presets, a browser tap e2→e4
-reaching the local Worker (ply 1, turn b), a slow-tap regression in the
-harness (select e2, wait 45 s past two poll timeouts, tap e4 → the move
-lands and the dots stay visible; before the fix the dots vanished and the
-tap did nothing), preset switching Bip 6 ↔ Active 3 (board re-renders
-both ways), and Menu → Test link opening the Diagnostics overlay on both
-presets, including with the Worker down. The deployed Worker is healthy
-(`/api/v1/health` → `{"status":"ok","version":"0.2.0"}`) and the
+`positionChanged` tests, 3 overlay tests incl. the backdrop tap, 10
+`applyMoveToFen` tests verified byte-for-byte against chess.js, and 4
+optimistic-move tests), `vite build` pass, `zeus build` pass (0.2.5,
+all 4 targets), headless-Chromium screenshots of both presets (see
+above), a browser tap e2→e4 reaching the local Worker (ply 1, turn b),
+a slow-tap regression in the harness (select e2, wait 45 s past two poll
+timeouts, tap e4 → the move lands and the dots stay visible; before the
+fix the dots vanished and the tap did nothing), preset switching Bip 6 ↔
+Active 3 (board re-renders both ways), Menu → Test link opening the
+Diagnostics overlay on both presets, including with the Worker down, and
+the optimistic move with a 2.5 s delayed move response (the pawn is on
+e4 while the server still says ply 0, no dim overlay) plus a forced 409
+(the board rolls back to the old position and a toast appears). The
+deployed Worker is healthy
+(`/api/v1/health` → `{"status":"ok","version":"0.2.1"}`) and the
 tunnel/DNS cutover is done.
 
-Not yet verified on-device: the 0.2.4 build has not been installed on
-either watch yet (see `docs/manual-test.md`). Also unconfirmed: Vibrator
-availability, console icon acceptance.
+Verified on-device: the 0.2.4 build is installed on both watches and
+plays correctly. Not yet verified on-device: the 0.2.5 build (optimistic
+moves, no black screen after a tap) — see `docs/manual-test.md`. Also
+unconfirmed: Vibrator availability, console icon acceptance.

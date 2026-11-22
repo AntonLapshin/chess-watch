@@ -15,7 +15,7 @@ import { Controller } from "./controller.js";
 import { loadRole, saveRole, clearRole, loadHapticsEnabled, saveHapticsEnabled } from "../utils/storage.js";
 import { vibrate, setHapticsEnabled } from "../utils/haptics.js";
 import { pieceAt, parseFen } from "../shared/fen.js";
-import { targetsFor, isPromotionMove, errorMessage, positionChanged } from "../shared/protocol.js";
+import { targetsFor, isPromotionMove, errorMessage, positionChanged, optimisticState } from "../shared/protocol.js";
 
 let _widgets = [];
 let _layout = null;
@@ -186,12 +186,32 @@ function onConnection(connected) {
 
 async function doMove(from, to, promotion) {
   if (!_controller || _pendingMove) return;
+  const preState = _state;
+  const prePly = _lastPly;
+  const preCheck = _lastCheck;
+  // Show the move at once; the server state (~1 s later) confirms it.
+  // _lastPly moves with it so the confirming state does not buzz as if
+  // the opponent had moved.
+  const optimistic = _state ? optimisticState(_state, from, to, promotion) : null;
   _pendingMove = true;
   _selected = null;
+  if (optimistic) {
+    _state = optimistic;
+    _lastPly = optimistic.game.ply;
+    _lastCheck = false;
+  }
   _page && _page.render();
   try {
     const res = await _controller.submitMove(from, to, promotion);
     if (!res.ok) {
+      // Roll the board back: the optimistic position never happened.
+      // A revision conflict also triggers a refresh in the controller,
+      // whose poll delivers the fresh state right after.
+      if (optimistic) {
+        _state = preState;
+        _lastPly = prePly;
+        _lastCheck = preCheck;
+      }
       showToast(errorMessage(res.code, res.message));
     }
   } finally {
@@ -339,7 +359,6 @@ Page(
           state: _state,
           selected: _selected,
           targets: targets(),
-          pendingMove: _pendingMove,
           onSquare,
         });
       } else {
