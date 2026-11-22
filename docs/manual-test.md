@@ -64,6 +64,12 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
       timeout — the dots must still be showing), then tap a target → the
       move lands. Before 0.2.3 the poll timeout cleared the selection
       mid-thought and the target tap only deselected.
+- [ ] Dot and empty-square taps (0.2.4): tap a piece, then tap a DOT in
+      the middle of a target square → the move lands; tap an empty square
+      with no piece on it → selection clears. Before 0.2.4 both did
+      nothing on-device (`click_func` is ignored on FILL_RECT — only
+      BUTTON honours it; board taps use `addEventListener(CLICK_DOWN)`).
+      Also: open the menu, tap outside the panel → it closes.
 - [ ] Illegal taps do nothing (no dot, no send); tapping an empty square
       deselects.
 - [ ] Promotion: push a pawn to the last rank → picker (Q/R/B/N) → the

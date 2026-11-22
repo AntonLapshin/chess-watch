@@ -38,14 +38,20 @@ function stubHmUI() {
   };
 }
 
+// Device model, not the harness shim: on the real watch, click_func
+// fires on BUTTON but is silently ignored on FILL_RECT and IMG — those
+// need addEventListener(CLICK_DOWN). The 0.2.2 tests treated click_func
+// as a live tap path for every widget, so they passed while the device
+// stayed broken (dots and cells dead on the watch, fine in the browser).
+// Against the 0.2.2 board code this stub fails 6/6 board tests.
 function tap(w) {
-  if (w.props.click_func) return w.props.click_func();
   if (w.listeners.CLICK_DOWN) return w.listeners.CLICK_DOWN();
+  if (w.type === "BUTTON" && w.props.click_func) return w.props.click_func();
   throw new Error(`widget ${w.type} at ${w.props.x},${w.props.y} has no tap handler`);
 }
 
 function hasTap(w) {
-  return Boolean(w.props.click_func || w.listeners.CLICK_DOWN);
+  return Boolean(w.listeners.CLICK_DOWN || (w.type === "BUTTON" && w.props.click_func));
 }
 
 function contains(w, x, y) {

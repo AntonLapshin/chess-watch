@@ -86,12 +86,14 @@ piece\" on-device, while the same code worked in the web harness, whose
 DOM cell `onClick` fires through the `<img>`. The legal-move dots (14 px,
 centred on target squares) and the selection frame swallowed taps the
 same way. Rule, now in `page/board.js`: every widget covering a square
-carries the tap itself — pieces via `addEventListener(CLICK_DOWN)` (the
-pattern dragon-army proves on-device for IMG taps), dots and frame via
-`click_func`. `page/board.test.mjs` asserts it: the topmost widget at
-every square centre has a tap path, and the old code fails 5 of its 6
-tests. The pending-move dim overlay deliberately has no handler (taps
-are ignored while a send is in flight anyway).
+carries the tap itself via `addEventListener(CLICK_DOWN)` — pieces,
+dots and frame alike (0.2.2 originally used `click_func` for the dots
+and frame, which turned out to be silently ignored on FILL_RECT — see
+"`click_func` is BUTTON-only (0.2.4)" below). `page/board.test.mjs`
+asserts it: the topmost widget at every square centre has a tap path,
+and the pre-0.2.2 code fails 5 of its 6 tests. The pending-move dim
+overlay deliberately has no handler (taps are ignored while a send is in
+flight anyway).
 
 Selection survives poll timeouts (0.2.3): `onState` used to clear the
 selection (`_selected = null`) on EVERY state delivery. A long-poll
@@ -105,6 +107,21 @@ compares ply, FEN, game_no and status, so a poll-timeout refresh, a
 presence-only refresh, or an offer arriving leaves the selection alone,
 while a move, a restart, or a game-over clears it. The same guard also
 stops a poll timeout from clearing `_pendingMove` mid-send.
+
+`click_func` is BUTTON-only (0.2.4): the 0.2.2 fix gave the board's
+FILL_RECT cells, dots and frame `click_func` — and the dots still did
+nothing on-device. `click_func` works on BUTTON (Menu, Test link, all
+overlay buttons), but on FILL_RECT it is silently ignored on the real
+watch; FILL_RECT (and IMG) taps must use `addEventListener(CLICK_DOWN)`,
+the pattern dragon-army uses for both. The 0.2.2 unit tests missed it
+because their stub treated `click_func` as a live tap path for every
+widget, and the web harness missed it because its shim maps `click_func`
+to a click — so the bug was invisible everywhere except on the watch.
+The stubs in `page/board.test.mjs` and `page/overlays.test.mjs` now model
+the device (only BUTTON `click_func` and any `addEventListener`
+register a tap path): against the 0.2.3 code they fail 5 tests. The same
+defect also hid in the overlay backdrop (tapping outside a panel never
+closed it) — it uses `addEventListener` now too.
 
 ## Layout
 

@@ -4,14 +4,21 @@
 // Zepp tap rule — every widget that covers a square must carry the tap
 // handler itself: the topmost widget at the tap point gets the event and
 // nothing bubbles to the widget below (unlike the DOM, where the web
-// harness's cell onClick fires through the <img>). The piece IMG covers
-// ~90% of its cell (38/42 px on Bip 6, 37/41 px on Active 3), so a piece
-// without a handler made its whole square untappable — taps on pieces
-// did nothing on-device while the same code worked in the browser. The
-// legal-move dots (14 px, centred on target squares) and the selection
-// frame swallow taps the same way, so they carry it too. The pending-move
-// dim overlay deliberately has none: taps are ignored while a send is in
-// flight anyway (see page/index.js _pendingMove).
+// harness's cell onClick fires through the <img>). And the handler must
+// be addEventListener(CLICK_DOWN): `click_func` works on BUTTON, but on a
+// FILL_RECT it silently does nothing on-device — 0.2.2 gave the cells,
+// dots and frame `click_func`, the unit tests passed (their stub treated
+// it as a live tap path), the harness worked (its shim maps click_func
+// to a click), and on the real watch every dot/cell tap died. The piece
+// IMG covers ~90% of its cell (38/42 px on Bip 6, 37/41 px on Active 3),
+// so a piece without a handler made its whole square untappable — taps on
+// pieces did nothing on-device while the same code worked in the browser.
+// The legal-move dots (14 px, centred on target squares) and the
+// selection frame swallow taps the same way, so they carry it too.
+// addEventListener(CLICK_DOWN) is the pattern proven on-device for
+// FILL_RECT and IMG alike (dragon-army uses it for both). The
+// pending-move dim overlay deliberately has none: taps are ignored while
+// a send is in flight anyway (see page/index.js _pendingMove).
 import { parseFen } from "../shared/fen.js";
 import { squareRect } from "./layout.js";
 import { THEME } from "./theme.js";
@@ -37,10 +44,12 @@ export function renderBoard(hmUI, widgets, opts) {
         color = THEME.lastMove;
       }
       if (checkSq && uci === checkSq) color = THEME.check;
+      // FILL_RECT taps need addEventListener(CLICK_DOWN) — click_func
+      // is silently ignored on this widget type on-device (0.2.2).
       const cellWidget = hmUI.createWidget(hmUI.widget.FILL_RECT, {
         x: rect.x, y: rect.y, w: rect.w, h: rect.h, color,
-        click_func: () => onSquare(uci),
       });
+      cellWidget.addEventListener(hmUI.event.CLICK_DOWN, () => onSquare(uci));
       widgets.push(cellWidget);
       // Piece image (centred in the cell). It sits ON TOP of the cell
       // rect, so it needs its own handler — without one the tap dies here
@@ -71,11 +80,11 @@ export function renderBoard(hmUI, widgets, opts) {
       { x: r.x + r.w - t, y: r.y, w: t, h: r.h },
     ];
     for (const f of frame) {
-      widgets.push(
-        hmUI.createWidget(hmUI.widget.FILL_RECT, {
-          ...f, color: THEME.selection, click_func: () => onSquare(selected),
-        }),
-      );
+      const frameWidget = hmUI.createWidget(hmUI.widget.FILL_RECT, {
+        ...f, color: THEME.selection,
+      });
+      frameWidget.addEventListener(hmUI.event.CLICK_DOWN, () => onSquare(selected));
+      widgets.push(frameWidget);
     }
   }
 
@@ -84,14 +93,13 @@ export function renderBoard(hmUI, widgets, opts) {
   for (const target of targets || []) {
     const r = squareRect(layout, fileOf(target), rankIdxOf(target), flipped);
     const d = 14;
-    widgets.push(
-      hmUI.createWidget(hmUI.widget.FILL_RECT, {
-        x: r.x + Math.floor((cell - d) / 2),
-        y: r.y + Math.floor((cell - d) / 2),
-        w: d, h: d, radius: 7, color: THEME.legalDot,
-        click_func: () => onSquare(target),
-      }),
-    );
+    const dotWidget = hmUI.createWidget(hmUI.widget.FILL_RECT, {
+      x: r.x + Math.floor((cell - d) / 2),
+      y: r.y + Math.floor((cell - d) / 2),
+      w: d, h: d, radius: 7, color: THEME.legalDot,
+    });
+    dotWidget.addEventListener(hmUI.event.CLICK_DOWN, () => onSquare(target));
+    widgets.push(dotWidget);
   }
 
   // Pending-move pulse: dim the board while a send is in flight.

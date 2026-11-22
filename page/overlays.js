@@ -5,13 +5,15 @@ import { resultText } from "../shared/protocol.js";
 import { THEME } from "./theme.js";
 
 function backdrop(hmUI, widgets, layout, onClose) {
-  widgets.push(
-    hmUI.createWidget(hmUI.widget.FILL_RECT, {
-      x: 0, y: 0, w: layout.width, h: layout.height,
-      color: THEME.overlay,
-      click_func: onClose || undefined,
-    }),
-  );
+  // Same trap as the board (0.2.2): click_func is silently ignored on
+  // FILL_RECT on-device, so tapping outside the panel never closed the
+  // overlay. addEventListener(CLICK_DOWN) is the working pattern.
+  const bg = hmUI.createWidget(hmUI.widget.FILL_RECT, {
+    x: 0, y: 0, w: layout.width, h: layout.height,
+    color: THEME.overlay,
+  });
+  if (onClose) bg.addEventListener(hmUI.event.CLICK_DOWN, onClose);
+  widgets.push(bg);
 }
 
 function panel(hmUI, widgets, layout, h) {
