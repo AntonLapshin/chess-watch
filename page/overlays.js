@@ -5,13 +5,15 @@ import { resultText } from "../shared/protocol.js";
 import { THEME } from "./theme.js";
 
 function backdrop(hmUI, widgets, layout, onClose) {
-  widgets.push(
-    hmUI.createWidget(hmUI.widget.FILL_RECT, {
-      x: 0, y: 0, w: layout.width, h: layout.height,
-      color: THEME.overlay,
-      click_func: onClose || undefined,
-    }),
-  );
+  // Same trap as the board (0.2.2): click_func is silently ignored on
+  // FILL_RECT on-device, so tapping outside the panel never closed the
+  // overlay. addEventListener(CLICK_DOWN) is the working pattern.
+  const bg = hmUI.createWidget(hmUI.widget.FILL_RECT, {
+    x: 0, y: 0, w: layout.width, h: layout.height,
+    color: THEME.overlay,
+  });
+  if (onClose) bg.addEventListener(hmUI.event.CLICK_DOWN, onClose);
+  widgets.push(bg);
 }
 
 function panel(hmUI, widgets, layout, h) {
@@ -131,14 +133,17 @@ export function renderResult(hmUI, widgets, layout, state, role, opts) {
 // the lines on the Connecting screen, this panel is an overlay, so a poll
 // failure swapping in the offline board cannot wipe it, and it is reachable
 // from Menu at any time — including while the board is showing. Lines are
-// kept short (<= ~32 chars) so they fit the round panel at 16 px.
+// kept short (<= ~32 chars) so they fit the round panel at 16 px. The
+// lines use a tighter 22 px step (16 px text) so the panel still fits all
+// 14 lines of a full online diagnostic on the 450 px Bip 6 display
+// (title + lines + buttons = 104 + 14*22 + 48 = 460, capped at 426).
 export function renderDiag(hmUI, widgets, layout, lines, opts) {
   backdrop(hmUI, widgets, layout, opts.onClose);
-  const h = Math.min(layout.height - 24, 112 + lines.length * 24 + 52);
+  const h = Math.min(layout.height - 24, 104 + lines.length * 22 + 48);
   const p = panel(hmUI, widgets, layout, h);
   text(hmUI, widgets, p.x, p.y + 14, p.w, 28, opts.busy ? "Testing…" : "Link test", 22);
   lines.forEach((line, i) => {
-    text(hmUI, widgets, p.x + 12, p.y + 48 + i * 24, p.w - 24, 22, line, 16, THEME.textSecondary);
+    text(hmUI, widgets, p.x + 12, p.y + 44 + i * 22, p.w - 24, 22, line, 16, THEME.textSecondary);
   });
   const by = p.y + h - 52;
   const half = Math.floor((p.w - 60) / 2);

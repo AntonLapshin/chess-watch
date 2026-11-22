@@ -5,12 +5,12 @@
     "appName": "Chess Watch",
     "appType": "app",
     "version": {
-      "code": 3,
-      "name": "0.1.2"
+      "code": 8,
+      "name": "0.2.4"
     },
     "icon": "icon.png",
     "vender": "chess-watch",
-    "description": "Two-player chess between two Amazfit watches, relayed by a self-hosted server."
+    "description": "Two-player chess between two Amazfit watches, relayed by a Cloudflare Worker + Durable Object."
   },
   "permissions": [
     "data:os.device.info",

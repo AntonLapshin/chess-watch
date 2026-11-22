@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fakeInitialState, errorMessage } from "./protocol.js";
+import { fakeInitialState, errorMessage, positionChanged } from "./protocol.js";
 
 describe("fakeInitialState", () => {
   it("uses built-in defaults without names", () => {
@@ -38,5 +38,39 @@ describe("errorMessage", () => {
   it("turns a bare HTTP status into a readable line", () => {
     expect(errorMessage("http_403")).toBe("Server answered 403");
     expect(errorMessage("http_401")).toBe("Server answered 401");
+  });
+});
+
+describe("positionChanged", () => {
+  const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+  const E4_FEN = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
+  const start = (over = {}) => ({
+    revision: 0, game_no: 1,
+    game: { ply: 0, fen: START_FEN, status: "active", ...over },
+  });
+
+  it("identical states (a poll timeout returning the same position) are not a change", () => {
+    expect(positionChanged(start(), start())).toBe(false);
+    // Same position, newer revision only (e.g. presence-only refresh).
+    expect(positionChanged(start(), { ...start(), revision: 3 })).toBe(false);
+    // Same position, offer attached/detached is not a position change.
+    expect(positionChanged(start(), start({ offer: { type: "offer_draw", by: "p2" } }))).toBe(false);
+  });
+
+  it("a move changes the position", () => {
+    expect(positionChanged(start(), start({ ply: 1, fen: E4_FEN }))).toBe(true);
+  });
+
+  it("a restart (new game_no) changes the position even at ply 0", () => {
+    expect(positionChanged(start(), { ...start(), game_no: 2 })).toBe(true);
+  });
+
+  it("a status change (game over) changes the position", () => {
+    expect(positionChanged(start(), start({ status: "finished" }))).toBe(true);
+  });
+
+  it("no previous state counts as changed", () => {
+    expect(positionChanged(null, start())).toBe(true);
+    expect(positionChanged(undefined, start())).toBe(true);
   });
 });

@@ -15,7 +15,7 @@ import { Controller } from "./controller.js";
 import { loadRole, saveRole, clearRole, loadHapticsEnabled, saveHapticsEnabled } from "../utils/storage.js";
 import { vibrate, setHapticsEnabled } from "../utils/haptics.js";
 import { pieceAt, parseFen } from "../shared/fen.js";
-import { targetsFor, isPromotionMove, errorMessage } from "../shared/protocol.js";
+import { targetsFor, isPromotionMove, errorMessage, positionChanged } from "../shared/protocol.js";
 
 let _widgets = [];
 let _layout = null;
@@ -65,6 +65,19 @@ function showToast(text) {
 function diagLines() {
   const lines = [];
   lines.push(`Role: ${_role} (${_role === "p1" ? "White" : "Black"})`);
+  // Live game state, so a "can't play" report can be told apart from a
+  // link failure at a glance. Only for real (non-offline) states: the
+  // offline fallback is a fixed start position, and its Turn/Legal would
+  // be meaningless. Lines stay <= ~32 chars (see renderDiag).
+  if (_state && !_state._offline) {
+    const g = _state.game;
+    const turnName = g.turn === "w" ? "White" : "Black";
+    lines.push(`Turn: ${turnName}${g.turn === _state.you.color ? " (you)" : ""}`);
+    lines.push(`Ply: ${g.ply}`);
+    lines.push(`Status: ${g.status}`);
+    lines.push(`Legal: ${(g.legal_moves || []).length}`);
+    lines.push(`Rev: ${_state.revision}`);
+  }
   if (_diag && !_diag.error) {
     const b = _diag.build || {};
     lines.push(`Build: ${b.commit || "?"}${_diag.version ? " v" + _diag.version : ""}`);
@@ -79,7 +92,7 @@ function diagLines() {
     } else {
       lines.push("Last: no server call yet");
     }
-    lines.push(`Tokens: ${_diag.hasTokens ? "yes" : "NO"}  Access: ${_diag.access ? "yes" : "no"}`);
+    lines.push(`Tokens: ${_diag.hasTokens ? "yes" : "NO"}`);
   } else if (_diag && _diag.error) {
     lines.push("Diag: side unreachable");
     lines.push(`Err: ${_diag.error}`);
@@ -130,6 +143,7 @@ function targets() {
 function onState(state) {
   const prevPly = _lastPly;
   const prevCheck = _lastCheck;
+  const prevState = _state;
   _state = state;
   // Only a REAL state clears the poll error. The offline fallback is
   // delivered through this same callback, so clearing here wiped the
@@ -138,8 +152,15 @@ function onState(state) {
   if (!state._offline) _netError = null;
   _lastPly = state.game.ply;
   _lastCheck = state.game.check;
-  _selected = null;
-  _pendingMove = false;
+  // Clear the selection (and a send in flight) only when the position
+  // actually changed. A long-poll returns the SAME state when its 20 s
+  // wait times out with no change, and clearing on that refresh dropped
+  // the selection mid-thought: a player who took >~10 s between tapping
+  // a piece and tapping its target found the tap only deselected.
+  if (positionChanged(prevState, state)) {
+    _selected = null;
+    _pendingMove = false;
+  }
   if (_controller) _controller.setRevision(state.revision);
   // Haptics: opponent moved, or we are now in check.
   if (state.game.ply > prevPly && prevPly >= 0 && state.game.ply > 0) vibrate();
@@ -168,10 +189,15 @@ async function doMove(from, to, promotion) {
   _pendingMove = true;
   _selected = null;
   _page && _page.render();
-  const res = await _controller.submitMove(from, to, promotion);
-  _pendingMove = false;
-  if (!res.ok) {
-    showToast(errorMessage(res.code, res.message));
+  try {
+    const res = await _controller.submitMove(from, to, promotion);
+    if (!res.ok) {
+      showToast(errorMessage(res.code, res.message));
+    }
+  } finally {
+    // Belt-and-braces: submitMove must never leave _pendingMove set (a
+    // throw here used to wedge every later tap with no toast).
+    _pendingMove = false;
   }
   _page && _page.render();
 }

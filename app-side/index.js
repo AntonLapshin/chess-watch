@@ -135,7 +135,6 @@ async function handleRequest(req) {
       lastFetch: _lastFetch,
       names: offlineNames(),
       hasTokens: Boolean(CONFIG.players.p1.token && CONFIG.players.p2.token),
-      access: Boolean(CONFIG.access && CONFIG.access.clientId),
       build: CONFIG.build || null,
       version: APP_VERSION,
       role: params.role || null,

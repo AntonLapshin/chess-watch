@@ -7,10 +7,10 @@ import { APP_VERSION } from "../../../shared/version.js";
 import { callServer, checkHealth, fetchShape, serverHost, toError } from "../../../shared/httpClient.js";
 
 // Browser requests go to the Vite dev server on the same origin; its /api
-// proxy forwards them to CHESS_SERVER_URL and adds the Cloudflare Access
-// service-token headers. Calling the tunnel hostname directly would fail
-// Cloudflare Access's CORS preflight (OPTIONS is rejected before auth).
-const WEB_CONFIG = { ...CONFIG, serverUrl: "", access: null };
+// proxy forwards them to CHESS_SERVER_URL (the local Worker dev server by
+// default — see the Makefile `web` target). Calling the Worker hostname
+// directly from the browser would hit CORS preflight handling.
+const WEB_CONFIG = { ...CONFIG, serverUrl: "" };
 
 let _lastGood = null;
 let _lastFetch = null;
@@ -96,7 +96,6 @@ export async function handleRequest(req) {
       lastFetch: _lastFetch,
       names: { p1: CONFIG.players.p1.name, p2: CONFIG.players.p2.name },
       hasTokens: Boolean(CONFIG.players.p1.token && CONFIG.players.p2.token),
-      access: false,
       build: CONFIG.build || null,
       version: APP_VERSION,
       role: params.role || null,
