@@ -36,7 +36,12 @@ export async function call(game, path, role, opts) {
 }
 
 export async function state(game, role, params = {}) {
-  const qs = new URLSearchParams(params).toString();
+  // Real clients always send presence=1 (side service, web harness), so
+  // that is the default here too. Pass presence: null to omit the param
+  // entirely, or presence: "0" for an explicit opt-out.
+  const merged = { presence: "1", ...params };
+  if (merged.presence === null || merged.presence === undefined) delete merged.presence;
+  const qs = new URLSearchParams(merged).toString();
   const r = await call(game, `/api/v1/state${qs ? `?${qs}` : ""}`, role);
   if (r.status !== 200) throw new Error(`state failed: ${r.status} ${JSON.stringify(r.data)}`);
   return r.data;

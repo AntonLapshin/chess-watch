@@ -143,6 +143,15 @@ export function clearMoves(sql, gameNo) {
   sql.exec("DELETE FROM moves WHERE game_id = 1 AND game_no = ?", gameNo);
 }
 
+/** Drop all recorded action ids. Called on restart so action idempotency
+ *  is per-game, like move idempotency (see clearMoves): the actions table
+ *  is only consulted for duplicate detection, never for history (the last
+ *  action lives on the games row), and a single global game means every
+ *  stored action belongs to the game being restarted. */
+export function clearActions(sql) {
+  sql.exec("DELETE FROM actions");
+}
+
 export function insertAction(sql, { clientActionId, type, actor, revision, payload, now }) {
   sql.exec(
     `INSERT INTO actions (client_action_id, type, actor, revision,

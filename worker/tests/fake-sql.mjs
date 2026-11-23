@@ -70,6 +70,10 @@ export class FakeSql {
       this.moves = this.moves.filter((m) => m.game_no !== gameNo);
       return;
     }
+    if (s === "DELETE FROM actions") {
+      this.actions = [];
+      return;
+    }
     if (s.startsWith("INSERT INTO actions")) {
       const [clientActionId, type, actor, revision, payloadJson, now] = params;
       this.actions.push({

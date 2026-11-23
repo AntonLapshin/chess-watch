@@ -110,9 +110,10 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
   For a shake timeout (Err 1) also read the Zepp app's Side Service log
   screen — see the checklist above. The 0.2.4 build is already installed
   on both watches and confirmed working on-device; 0.2.5 is optimistic
-  moves (no more black screen after a tap) and the Worker 0.2.1 is the
-  per-revision derived-state cache — deploy the Worker with
-  `make worker-deploy` first so the health check reads 0.2.1.
+  moves (no more black screen after a tap) and the Worker 0.2.2 is the
+  e2e-fixes release (check on mate, absolute recent_moves ply, presence
+  opt-in, per-game action ids) — deploy the Worker with
+  `make worker-deploy` first so the health check reads 0.2.2.
 - `fetch` response shape on the side service (`res.status` vs `res.body`
   only) — the client parses defensively, but on-device behaviour is
   unconfirmed until the Diagnostics screen is read.
@@ -149,7 +150,7 @@ cd worker && cp .dev.vars.example .dev.vars   # fill in test tokens
 npm run dev &                                 # http://localhost:8787
 P1=<token-p1>; P2=<token-p2>
 curl -s http://localhost:8787/api/v1/health
-# -> {"status":"ok","version":"0.2.1"}
+# -> {"status":"ok","version":"0.2.2"}
 curl -s -H "Authorization: Bearer $P1" "http://localhost:8787/api/v1/state?since=-1"
 curl -s -X POST -H "Authorization: Bearer $P1" -H "Content-Type: application/json" \
   -d '{"client_move_id":"smoke-1","expected_revision":0,"from":"e2","to":"e4"}' \

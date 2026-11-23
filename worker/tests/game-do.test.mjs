@@ -36,6 +36,33 @@ describe("state", () => {
     expect(s.opponent.online).toBe(true);
   });
 
+  it("presence is opt-in: no presence param (or 0) leaves the caller offline", async () => {
+    const { game } = makeGame();
+    await state(game, "p2", { presence: null });
+    let s = await state(game, "p1");
+    expect(s.opponent.online).toBe(false);
+    await state(game, "p2", { presence: "0" });
+    s = await state(game, "p1");
+    expect(s.opponent.online).toBe(false);
+    await state(game, "p2", { presence: "1" });
+    s = await state(game, "p1");
+    expect(s.opponent.online).toBe(true);
+  });
+
+  it("recent_moves labels absolute ply numbers", async () => {
+    const { game } = makeGame();
+    const moves = ["g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1", "f6g8"];
+    let s = await state(game, "p1");
+    for (let i = 0; i < moves.length; i++) {
+      s = await play(game, i % 2 === 0 ? "p1" : "p2", s.revision, moves[i], `rm${i}`);
+    }
+    expect(s.game.ply).toBe(8);
+    expect(s.game.recent_moves.map((m) => m.ply)).toEqual([3, 4, 5, 6, 7, 8]);
+    expect(s.game.recent_moves.map((m) => m.san)).toEqual([
+      "Ng1", "Ng8", "Nf3", "Nf6", "Ng1", "Ng8",
+    ]);
+  });
+
   it("unknown endpoint is 404", async () => {
     const { game } = makeGame();
     const r = await call(game, "/api/v1/nope", "p1");
@@ -65,8 +92,8 @@ describe("derived state cache", () => {
   it("check is detected after a cached state", async () => {
     const { game } = makeGame();
     // 1.e4 e5 2.Qh5 Nc6 3.Qxe5+: the black king is in check and the game
-    // is still active. (After an actual mate, check reads false: it is
-    // only reported while the game is active — pre-existing rule.)
+    // is still active. Check is a property of the board, so it is also
+    // reported on a finished game — see the fool's mate test below.
     let s = await play(game, "p1", 0, "e2e4", "k1");
     s = await play(game, "p2", s.revision, "e7e5", "k2");
     s = await play(game, "p1", s.revision, "d1h5", "k3");
@@ -135,6 +162,10 @@ describe("moves", () => {
     expect(s.game.status).toBe("finished");
     expect(s.game.result).toBe("b");
     expect(s.game.result_reason).toBe("checkmate");
+    // The mate is still a check: the mated king's square is reported so
+    // the board can tint it red.
+    expect(s.game.check).toBe(true);
+    expect(s.game.check_square).toBe("e1");
     const r = await move(game, "p1", s.revision, "e2", "e4", { cid: "fm5" });
     expect(r.status).toBe(409);
     expect(r.data.code).toBe("game_over");

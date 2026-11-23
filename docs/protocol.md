@@ -19,7 +19,7 @@ login step. A bad or missing token gets `401 {"code": "unauthorized"}`.
 
 ### `GET /api/v1/health`
 
-Liveness, no auth. Returns `{"status": "ok", "version": "0.2.1"}`. If the
+Liveness, no auth. Returns `{"status": "ok", "version": "0.2.2"}`. If the
 Worker secrets are missing, equal, shorter than 24 chars, or still the
 placeholders, every `/api/v1/*` request (including health) fails with
 `500 {"code": "config_error"}` instead.
@@ -35,6 +35,8 @@ Full game state, with long-polling.
   wait the full `wait` on first load.
 - `wait` (seconds, clamped to 0–25): long-poll budget. The client uses 20.
 - `presence=1`: marks the caller online (seen within the last 45 s).
+  Only this value does: omitting `presence` (or any other value) leaves
+  the caller's presence unchanged. Both real clients send `presence=1`.
 
 State payload (kept under ~1 KB for BLE):
 
@@ -66,7 +68,11 @@ State payload (kept under ~1 KB for BLE):
 
 - `legal_moves` (UCI) is included only when the game is active and it is
   the requesting player's turn. The watch renders target dots from it.
-- `recent_moves` is capped at 6; full history stays server-side.
+- `recent_moves` is capped at 6; full history stays server-side. `ply`
+  is the absolute ply number (1-based across the whole game), not the
+  index within the window.
+- `check` / `check_square` reflect the board even after the game ends:
+  a checkmate still reports the mated king in check.
 - `offer` is `{type, by, expires_at}` or `null`.
 - `claimable` lists `"threefold"` / `"fifty"` when the player to move may
   claim a draw.

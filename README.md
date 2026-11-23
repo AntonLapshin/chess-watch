@@ -69,7 +69,7 @@ in `worker/README.md` § Deploy + cutover):
   managed by Cloudflare). `make worker-login` authorizes wrangler; check
   it with `cd worker && npx wrangler whoami`.
 - **Workers & Pages → chess-watch:** after `make worker-deploy`, check
-  the deployment is listed and the version is 0.2.1. Settings →
+  the deployment is listed and the version is 0.2.2. Settings →
   Variables → Secrets shows `CHESS_TOKEN_P1` / `CHESS_TOKEN_P2`
   (the dashboard alternative to `make worker-secrets`); Settings →
   Variables (plain Variables, not Secrets) holds `CHESS_P1_NAME` /
@@ -88,7 +88,7 @@ in `worker/README.md` § Deploy + cutover):
   service token; on the laptop, stop/disable `cloudflared-chess-watch`
   and delete the tunnel.
 - **Verify:** `curl $CHESS_SERVER_URL/api/v1/health` →
-  `{"status":"ok","version":"0.2.1"}` (also check the workers.dev URL
+  `{"status":"ok","version":"0.2.2"}` (also check the workers.dev URL
   first, before the route attaches).
 
 ## Repo layout
@@ -162,7 +162,7 @@ the optimistic move with a 2.5 s delayed move response (the pawn is on
 e4 while the server still says ply 0, no dim overlay) plus a forced 409
 (the board rolls back to the old position and a toast appears). The
 deployed Worker is healthy
-(`/api/v1/health` → `{"status":"ok","version":"0.2.1"}`) and the
+(`/api/v1/health` → `{"status":"ok","version":"0.2.2"}`) and the
 tunnel/DNS cutover is done.
 
 Verified on-device: the 0.2.4 build is installed on both watches and

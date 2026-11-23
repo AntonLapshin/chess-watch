@@ -37,7 +37,7 @@ import {
 } from "./rules.js";
 import * as store from "./store.js";
 
-export const VERSION = "0.2.1";
+export const VERSION = "0.2.2";
 const ONLINE_WINDOW_S = 45;
 const SQUARE_RE = /^[a-h][1-8]$/;
 
@@ -80,7 +80,12 @@ export class ChessGame {
     const g = this.game;
     if (this.derived && this.derived.revision === g.revision) return this.derived;
     const board = this.board;
-    const check = g.status === "active" && board.isCheck();
+    // check is a property of the board, not of the game status: a
+    // checkmate still reports the mated king in check (the watch status
+    // bar already branches on finished first, and the board tints the
+    // checked king's square). Previously this was gated on active, so a
+    // mate reported check=false / check_square=null.
+    const check = board.isCheck();
     this.derived = {
       revision: g.revision,
       check,
@@ -222,9 +227,17 @@ export class ChessGame {
     const d = this._derived();
     const check = d.check;
     const checkSquare = d.checkSquare;
-    // ply numbering matches the old server: index within the last-6 window
-    // + 1 (clients only display `san`, see page/overlays.js).
-    const recent = moves.slice(-6).map((m, i) => ({ ply: i + 1, san: m.san, by: m.by }));
+    // recent_moves is the last 6 moves, labelled with their ABSOLUTE ply
+    // numbers (1-based across the whole game). Previously the window was
+    // numbered 1..6, so after ply 6 every label was wrong; nothing
+    // consumed ply (clients only display san), but a history view would
+    // have mislabelled every move.
+    const tail = moves.slice(-6);
+    const recent = tail.map((m, i) => ({
+      ply: moves.length - tail.length + i + 1,
+      san: m.san,
+      by: m.by,
+    }));
     let last = null;
     if (moves.length > 0) {
       const m = moves[moves.length - 1];
@@ -292,7 +305,11 @@ export class ChessGame {
   }
 
   async handleState(request, url, role, now) {
-    this.presence[role] = now;
+    // Presence is opt-in via the query param, as documented: only
+    // presence=1 marks the caller online. Previously every state call
+    // marked presence (the param was never read), so the flag was dead.
+    // Both real clients (side service, web harness) send presence=1.
+    if (url.searchParams.get("presence") === "1") this.presence[role] = now;
     const sinceRaw = url.searchParams.get("since");
     const since = sinceRaw === null || sinceRaw === "" ? null : parseInt(sinceRaw, 10);
     const waitRaw = url.searchParams.get("wait");
@@ -462,6 +479,14 @@ export class ChessGame {
       } else if (offerType === "offer_restart") {
         const oldGameNo = g.gameNo;
         store.clearMoves(this.sql, oldGameNo);
+        // Idempotency is per-game for moves (their rows are wiped above)
+        // and must be per-game for actions too: without this, a
+        // client_action_id from a finished game would keep returning
+        // duplicate:true forever, silently dropping a legitimate new
+        // action that happened to reuse the id (e.g. a counter-based
+        // client). A stale retry is still safe: it reaches the revision
+        // check next and fails with revision_conflict.
+        store.clearActions(this.sql);
         g.gameNo = oldGameNo + 1;
         g.fen = START_FEN;
         g.moves = [];

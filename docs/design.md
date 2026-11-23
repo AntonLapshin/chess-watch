@@ -295,9 +295,9 @@ checker + knight mark (`scripts/gen-icons.mjs`).
     `test-config/wrangler.test.toml` with fake tokens (see the comment at
     the top of that file for why it lives in a subdirectory), and the pool
     shares DO storage per file, so `tests/integration.test.mjs` is ordered
-    to build on a single game. One carried-over quirk: `recent_moves[].ply`
-    is numbered within the last-6 window (1..6), exactly as the 0.1.x
-    backend computed it — clients only display `san`.
+    to build on a single game. `recent_moves[].ply` was numbered within
+    the last-6 window (1..6) in 0.1.x/0.2.0/0.2.1; since 0.2.2 it is the
+    absolute ply number (clients only display `san`).
 
 ## Verification items (plan §10) — status
 

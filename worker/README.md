@@ -145,7 +145,7 @@ Pages → chess-watch → Settings → Variables → add `CHESS_P1_NAME` /
 Dashboard half of the deploy (dash.cloudflare.com; also summarized in
 the root README): the custom domain must be a Cloudflare zone (DNS
 managed by Cloudflare). After deploying, check Workers & Pages →
-chess-watch for the deployment and version 0.2.1. Settings → Variables
+chess-watch for the deployment and version 0.2.2. Settings → Variables
 → Secrets is the dashboard alternative to `make worker-secrets`;
 Settings → Triggers → Routes is the alternative to the `--route` the
 deploy script passes (add the route there if you deploy without it).
@@ -162,7 +162,7 @@ revision 0, so finish or abandon any in-progress laptop game first):
 
 1. Deploy the Worker and verify it on the workers.dev URL first
    (`curl https://<name>.<subdomain>.workers.dev/api/v1/health` →
-   `{"status":"ok","version":"0.2.1"}`), then on the custom-domain URL
+   `{"status":"ok","version":"0.2.2"}`), then on the custom-domain URL
    from `.env` after the route attaches.
 2. In the Cloudflare dashboard → DNS, delete the tunnel CNAME for the
    custom domain (the Worker route replaces it; if the CNAME still

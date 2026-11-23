@@ -36,6 +36,23 @@ describe("restart", () => {
     expect(s.game.status).toBe("active");
     expect(s.game.fen).toMatch(/^rnbqkbnr\/pppppppp\/8\/8\/8\/8\/PPPPPPPP\/RNBQKBNR w/);
   });
+
+  it("action ids are reusable after a restart (idempotency is per-game)", async () => {
+    const { game } = makeGame();
+    let s = await play(game, "p1", 0, "e2e4", "ar1");
+    let r = await action(game, "p1", s.revision, "offer_restart", "ar2");
+    s = r.data;
+    r = await action(game, "p2", s.revision, "accept", "ar3");
+    expect(r.status).toBe(200);
+    s = r.data;
+    expect(s.game_no).toBe(2);
+    // Reusing the pre-restart offer id must NOT come back duplicate: the
+    // restart wiped the actions table, so this is a fresh offer_draw.
+    r = await action(game, "p1", s.revision, "offer_draw", "ar2");
+    expect(r.status).toBe(200);
+    expect(r.data.duplicate).toBe(false);
+    expect(r.data.game.offer.type).toBe("offer_draw");
+  });
 });
 
 describe("takeback", () => {
