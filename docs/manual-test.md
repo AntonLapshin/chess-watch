@@ -83,7 +83,11 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
 - [ ] Castling (both sides), en passant, check (king square tints red,
       "Check!" in the status bar).
 - [ ] Checkmate / stalemate → result screen on both watches ("You win —
-      checkmate" / "Draw — stalemate"). Play again sends a restart offer.
+      checkmate" / "Draw — stalemate"). OK dismisses to the board, which
+      stays look-only as long as the player wants (tapping a square does
+      nothing but a toast); restart is Menu → Start over, and the menu
+      after a finished game shows only Start over / Vibrate / Test link /
+      Switch player / Close.
 - [ ] Menu → Offer draw → opponent sees the offer dialog with countdown;
       accept ends the game as a draw, decline toasts the offerer.
 - [ ] Menu → Take back: after 1 ply reverts 1 move; after the opponent
@@ -104,16 +108,17 @@ Two watches (Bip 6 + Active 3 Premium) + the Cloudflare Worker backend.
 
 ## Open verification items (not yet done on-device)
 
-- 0.2.5 build install: `zeus build` passes (0.2.5, all targets) with the
+- 0.2.6 build install: `zeus build` passes (0.2.6, all targets) with the
   registered `appId` 1137599. Install via `make preview` on both
   watches and read Menu → Test link first (see the README decision table).
   For a shake timeout (Err 1) also read the Zepp app's Side Service log
   screen — see the checklist above. The 0.2.4 build is already installed
-  on both watches and confirmed working on-device; 0.2.5 is optimistic
-  moves (no more black screen after a tap) and the Worker 0.2.2 is the
-  e2e-fixes release (check on mate, absolute recent_moves ply, presence
-  opt-in, per-game action ids) — deploy the Worker with
-  `make worker-deploy` first so the health check reads 0.2.2.
+  on both watches and confirmed working on-device; 0.2.6 is optimistic
+  moves (no more black screen after a tap) plus the result-dialog OK
+  (look at the board after mate; rematch via Menu → Start over) and the
+  Worker 0.2.2 is the e2e-fixes release (check on mate, absolute
+  recent_moves ply, presence opt-in, per-game action ids) — deploy the
+  Worker with `make worker-deploy` first so the health check reads 0.2.2.
 - `fetch` response shape on the side service (`res.status` vs `res.body`
   only) — the client parses defensively, but on-device behaviour is
   unconfirmed until the Diagnostics screen is read.

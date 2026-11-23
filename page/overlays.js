@@ -60,21 +60,33 @@ export function renderPicker(hmUI, widgets, layout, onPick) {
 
 export function renderMenu(hmUI, widgets, layout, opts) {
   backdrop(hmUI, widgets, layout, opts.onClose);
-  const p = panel(hmUI, widgets, layout, 384);
+  // After the game ends, Offer draw / Take back / Resign are meaningless
+  // (the server answers game_over) — only Start over stays, plus the
+  // always-available items. Panel height scales with the item count:
+  // 64 + 8*40 = 384, the previous fixed height.
+  const items = opts.finished
+    ? [
+        ["Start over", opts.onRestart],
+        [opts.hapticsOn ? "Vibrate: on" : "Vibrate: off", opts.onToggleHaptics],
+        ["Test link", opts.onTestLink],
+        ["Switch player", opts.onSwitchPlayer],
+        ["Close", opts.onClose],
+      ]
+    : [
+        ["Offer draw", opts.onOfferDraw],
+        ["Take back a move", opts.onTakeback],
+        ["Start over", opts.onRestart],
+        ["Resign", opts.onResign, true],
+        [opts.hapticsOn ? "Vibrate: on" : "Vibrate: off", opts.onToggleHaptics],
+        ["Test link", opts.onTestLink],
+        ["Switch player", opts.onSwitchPlayer],
+        ["Close", opts.onClose],
+      ];
+  const p = panel(hmUI, widgets, layout, 64 + items.length * 40);
   const bw = p.w - 40;
   let y = p.y + 16;
   text(hmUI, widgets, p.x, y, p.w, 28, "Menu", 22);
   y += 44;
-  const items = [
-    ["Offer draw", opts.onOfferDraw],
-    ["Take back a move", opts.onTakeback],
-    ["Start over", opts.onRestart],
-    ["Resign", opts.onResign, true],
-    [opts.hapticsOn ? "Vibrate: on" : "Vibrate: off", opts.onToggleHaptics],
-    ["Test link", opts.onTestLink],
-    ["Switch player", opts.onSwitchPlayer],
-    ["Close", opts.onClose],
-  ];
   for (const [label, fn, danger] of items) {
     button(hmUI, widgets, p.x + 20, y, bw, 36, label, fn, danger);
     y += 40;
@@ -121,12 +133,15 @@ export function renderOffer(hmUI, widgets, layout, offer, state, opts) {
 
 export function renderResult(hmUI, widgets, layout, state, role, opts) {
   backdrop(hmUI, widgets, layout);
-  const p = panel(hmUI, widgets, layout, 230);
+  // One button only: OK dismisses to the board, which stays look-only
+  // for as long as the player wants (tapping a square does nothing after
+  // the game ends). There is no "Play again" here on purpose — a rematch
+  // is Menu → Start over, so the dialog never needs to come back.
+  const p = panel(hmUI, widgets, layout, 196);
   text(hmUI, widgets, p.x + 10, p.y + 18, p.w - 20, 34, resultText(state, role), 22);
   const recent = (state.game.recent_moves || []).map((m) => m.san).join(" ");
   text(hmUI, widgets, p.x + 10, p.y + 62, p.w - 20, 56, recent || "No moves played", 16, THEME.textSecondary);
-  button(hmUI, widgets, p.x + 20, p.y + 128, p.w - 40, 48, "Play again", opts.onPlayAgain);
-  button(hmUI, widgets, p.x + 20, p.y + 184 - 8, p.w - 40, 40, "Close", opts.onClose);
+  button(hmUI, widgets, p.x + 20, p.y + 128, p.w - 40, 48, "OK", opts.onOk);
 }
 
 // Diagnostics overlay: the durable home of the "Test link" result. Unlike

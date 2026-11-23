@@ -234,8 +234,16 @@ async function doAction(type, claim) {
 function onSquare(uci) {
   if (!_state || _overlay || _pendingMove) return;
   if (!myTurn()) {
-    if (_state.game.status === "finished") _overlay = "result";
-    else showToast("Wait for your opponent");
+    if (_state.game.status === "finished") {
+      // The result dialog shows once per finished revision; after OK the
+      // board is look-only. Tapping a square must not pop the dialog
+      // back — that would defeat the look. Rematch is Menu → Start over.
+      if (_resultDismissedFor === _state.revision) {
+        showToast("Game over — Menu → Start over to play again");
+      } else {
+        _overlay = "result";
+      }
+    } else showToast("Wait for your opponent");
     _page && _page.render();
     return;
   }
@@ -441,9 +449,15 @@ Page(
         );
       }
 
-      // Incoming offer (only when addressed to us).
+      // Incoming offer (only when addressed to us). An offer supersedes
+      // the result screen: after checkmate the opponent's dialog would
+      // otherwise hide the restart offer until they happen to click OK
+      // (and the offer expires after 120s). Declining brings the result
+      // screen back — same revision, never dismissed — and accepting
+      // starts a new game, so the result block below no longer applies.
       const offer = _state && _state.game.offer;
-      if (offer && offer.by !== _role && !_overlay) {
+      if (offer && offer.by !== _role && (!_overlay || _overlay === "result")) {
+        _overlay = null;
         renderOffer(hmUI, _widgets, _layout, offer, _state, {
           onAccept: () => doAction("accept"),
           onDecline: () => doAction("decline"),
@@ -462,6 +476,9 @@ Page(
       if (_overlay === "menu") {
         renderMenu(hmUI, _widgets, _layout, {
           hapticsOn: _hapticsOn,
+          // _state can be null while still connecting; the menu opens
+          // anyway, and then nothing is finished.
+          finished: !!(_state && _state.game.status === "finished"),
           onClose: () => { _overlay = null; this.render(); },
           onOfferDraw: () => { _overlay = null; doAction("offer_draw"); },
           onTakeback: () => { _overlay = null; doAction("offer_takeback"); },
@@ -512,12 +529,7 @@ Page(
         });
       } else if (_overlay === "result") {
         renderResult(hmUI, _widgets, _layout, _state, _role, {
-          onPlayAgain: () => {
-            _resultDismissedFor = _state.revision;
-            _overlay = null;
-            doAction("offer_restart");
-          },
-          onClose: () => {
+          onOk: () => {
             _resultDismissedFor = _state.revision;
             _overlay = null;
             this.render();

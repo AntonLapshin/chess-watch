@@ -166,6 +166,7 @@ deployed Worker is healthy
 tunnel/DNS cutover is done.
 
 Verified on-device: the 0.2.4 build is installed on both watches and
-plays correctly. Not yet verified on-device: the 0.2.5 build (optimistic
-moves, no black screen after a tap) — see `docs/manual-test.md`. Also
+plays correctly. Not yet verified on-device: the 0.2.6 build (optimistic
+moves, no black screen after a tap; result-dialog OK with look-only
+board after mate) — see `docs/manual-test.md`. Also
 unconfirmed: Vibrator availability, console icon acceptance.
